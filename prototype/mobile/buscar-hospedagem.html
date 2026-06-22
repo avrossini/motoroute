@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="pt-BR"><head><meta charset="UTF-8"><link rel="stylesheet" href="../css/mobile.css">
+<style>
+.search-bar{display:flex;align-items:center;gap:8px;background:#f5f5f5;border:1.5px solid #e5e5e5;border-radius:14px;padding:11px 14px;margin:10px 20px;flex-shrink:0}
+.search-input{flex:1;border:none;background:none;font-size:14px;color:#1A1A1A;outline:none}
+.search-input::placeholder{color:#aaa}
+.lodging-card{margin:0 16px 10px;background:#fff;border-radius:14px;box-shadow:0 2px 8px rgba(0,0,0,.07);overflow:hidden;flex-shrink:0}
+.lodging-header{padding:12px 14px;display:flex;align-items:flex-start;gap:10px}
+.lodging-icon{width:42px;height:42px;border-radius:12px;background:#f5f5f5;display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0}
+.lodging-name{font-size:14px;font-weight:700;color:#1A1A1A;line-height:1.2}
+.lodging-meta{font-size:11px;color:#888;margin-top:3px}
+.lodging-stats{display:flex;gap:10px;padding:6px 14px 12px}
+.lodging-stat{display:flex;align-items:center;gap:5px;font-size:11px;font-weight:600}
+.lodging-stat.rating{color:#C97826}
+.lodging-stat.distance{color:#2563EB}
+.lodging-stat.price{color:#16A34A}
+.lodging-select-btn{width:calc(100% - 28px);margin:0 14px 12px;background:#1A1A1A;color:#fff;border:none;border-radius:10px;padding:10px;font-size:13px;font-weight:700;cursor:pointer}
+.distance-note{margin:4px 20px 8px;padding:8px 12px;background:#EFF6FF;border-radius:10px;font-size:11px;color:#2563EB;flex-shrink:0}
+.sort-row{display:flex;gap:6px;padding:4px 20px 8px;flex-shrink:0}
+.sort-chip{padding:5px 12px;border-radius:20px;font-size:11px;font-weight:700;border:none;cursor:pointer}
+.sort-chip.active{background:#1A1A1A;color:#fff}
+.sort-chip.inactive{background:#f0f0f0;color:#888}
+</style>
+</head>
+<body>
+  <div class="status-bar light">
+    <div class="notch"></div>
+    <span>9:41</span>
+    <div class="status-icons"><span>●●●</span><span>WiFi</span><span>🔋</span></div>
+  </div>
+  <div class="screen-content">
+    <div class="form-header">
+      <button class="back-btn" onclick="window.parent.goto('roteiro')">←</button>
+      <div>
+        <div class="form-header-title">Hospedagem — Dia 1</div>
+      </div>
+    </div>
+
+    <div class="search-bar">
+      <span style="font-size:16px">📍</span>
+      <input class="search-input" type="text" value="Pindamonhangaba, SP" placeholder="Cidade ou endereço de destino...">
+      <span style="font-size:16px;color:#C97826;cursor:pointer">🔍</span>
+    </div>
+
+    <div class="distance-note">
+      📐 Usando o <strong>centro de Pindamonhangaba</strong> como referência de distância. Para refinar, informe um endereço.
+    </div>
+
+    <div class="sort-row">
+      <button class="sort-chip active">Distância</button>
+      <button class="sort-chip inactive">Avaliação</button>
+      <button class="sort-chip inactive">Preço</button>
+    </div>
+
+    <div style="padding:0 20px 4px;font-size:11px;color:#aaa;flex-shrink:0">6 opções encontradas</div>
+
+    <!-- Opção 1 — mais próxima -->
+    <div class="lodging-card">
+      <div class="lodging-header">
+        <div class="lodging-icon">🏡</div>
+        <div style="flex:1">
+          <div class="lodging-name">Pousada da Serra</div>
+          <div class="lodging-meta">Rua das Bromélias, 122 · Pindamonhangaba</div>
+        </div>
+        <span style="font-size:10px;font-weight:700;color:#16A34A;background:#F0FDF4;padding:3px 7px;border-radius:20px">0,4km</span>
+      </div>
+      <div class="lodging-stats">
+        <span class="lodging-stat rating">★ 4,7 <span style="color:#aaa;font-weight:400">(312 aval.)</span></span>
+        <span style="color:#e5e5e5">|</span>
+        <span class="lodging-stat price">R$280/noite</span>
+        <span style="color:#e5e5e5">|</span>
+        <span class="lodging-stat" style="color:#888">$$ · Pousada</span>
+      </div>
+      <button class="lodging-select-btn" onclick="window.parent.goto('roteiro')">✓ Selecionar esta hospedagem</button>
+    </div>
+
+    <!-- Opção 2 -->
+    <div class="lodging-card">
+      <div class="lodging-header">
+        <div class="lodging-icon">🏨</div>
+        <div style="flex:1">
+          <div class="lodging-name">Hotel Mantiqueira Palace</div>
+          <div class="lodging-meta">Av. Dr. Gaspar, 480 · Pindamonhangaba</div>
+        </div>
+        <span style="font-size:10px;font-weight:700;color:#2563EB;background:#EFF6FF;padding:3px 7px;border-radius:20px">1,1km</span>
+      </div>
+      <div class="lodging-stats">
+        <span class="lodging-stat rating">★ 4,2 <span style="color:#aaa;font-weight:400">(88 aval.)</span></span>
+        <span style="color:#e5e5e5">|</span>
+        <span class="lodging-stat price">R$220/noite</span>
+        <span style="color:#e5e5e5">|</span>
+        <span class="lodging-stat" style="color:#888">$ · Hotel</span>
+      </div>
+      <button class="lodging-select-btn">✓ Selecionar esta hospedagem</button>
+    </div>
+
+    <!-- Opção 3 -->
+    <div class="lodging-card">
+      <div class="lodging-header">
+        <div class="lodging-icon">🌿</div>
+        <div style="flex:1">
+          <div class="lodging-name">Recanto Verde Pousada</div>
+          <div class="lodging-meta">Estrada do Recanto, km 3 · Pinda</div>
+        </div>
+        <span style="font-size:10px;font-weight:700;color:#888;background:#f0f0f0;padding:3px 7px;border-radius:20px">3,2km</span>
+      </div>
+      <div class="lodging-stats">
+        <span class="lodging-stat rating">★ 4,9 <span style="color:#aaa;font-weight:400">(47 aval.)</span></span>
+        <span style="color:#e5e5e5">|</span>
+        <span class="lodging-stat price">R$380/noite</span>
+        <span style="color:#e5e5e5">|</span>
+        <span class="lodging-stat" style="color:#888">$$$ · Pousada</span>
+      </div>
+      <button class="lodging-select-btn">✓ Selecionar esta hospedagem</button>
+    </div>
+
+    <!-- Opção 4 -->
+    <div class="lodging-card">
+      <div class="lodging-header">
+        <div class="lodging-icon">🏨</div>
+        <div style="flex:1">
+          <div class="lodging-name">Ibis Pindamonhangaba</div>
+          <div class="lodging-meta">Rod. Presidente Dutra, km 98 · Pinda</div>
+        </div>
+        <span style="font-size:10px;font-weight:700;color:#888;background:#f0f0f0;padding:3px 7px;border-radius:20px">4,7km</span>
+      </div>
+      <div class="lodging-stats">
+        <span class="lodging-stat rating">★ 3,9 <span style="color:#aaa;font-weight:400">(204 aval.)</span></span>
+        <span style="color:#e5e5e5">|</span>
+        <span class="lodging-stat price">R$175/noite</span>
+        <span style="color:#e5e5e5">|</span>
+        <span class="lodging-stat" style="color:#888">$ · Hotel</span>
+      </div>
+      <button class="lodging-select-btn">✓ Selecionar esta hospedagem</button>
+    </div>
+
+  </div>
+</body></html>

@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="pt-BR"><head><meta charset="UTF-8"><meta name="viewport" content="width=375"><link rel="stylesheet" href="../css/mobile.css"></head>
+<body>
+  <div class="status-bar light">
+    <div class="notch"></div>
+    <span>9:41</span>
+    <div class="status-icons"><span>●●●</span><span>WiFi</span><span>🔋</span></div>
+  </div>
+  <div class="screen-content">
+    <div class="home-header">
+      <div class="home-greeting">Bom dia, André 👋</div>
+      <div class="home-title">Moto<span>Route</span></div>
+    </div>
+    <div class="section-label">PRÓXIMA VIAGEM</div>
+    <div class="trip-card" onclick="window.parent.goto('roteiro')">
+      <div class="trip-card-header">
+        <div>
+          <div class="trip-card-name">Serra da Mantiqueira</div>
+          <div class="trip-card-route">São Paulo → Campos do Jordão</div>
+          <div class="trip-card-date">25-28 jun 2026 · 3 dias</div>
+        </div>
+        <span class="trip-badge planned">Planejada</span>
+      </div>
+      <div class="trip-card-body">
+        <div class="trip-stats">
+          <div class="trip-stat"><div class="trip-stat-val">847km</div><div class="trip-stat-label">Distância</div></div>
+          <div class="trip-stat"><div class="trip-stat-val">3</div><div class="trip-stat-label">Dias</div></div>
+          <div class="trip-stat"><div class="trip-stat-val">12</div><div class="trip-stat-label">Paradas</div></div>
+          <div class="trip-stat"><div class="trip-stat-val">8d</div><div class="trip-stat-label">Clima</div></div>
+        </div>
+      </div>
+    </div>
+    <div class="section-label">ROTEIROS SALVOS</div>
+    <div class="trip-card" onclick="window.parent.goto('salvos')">
+      <div class="trip-card-header">
+        <div>
+          <div class="trip-card-name">Litoral Sul</div>
+          <div class="trip-card-route">SP → Florianópolis</div>
+          <div class="trip-card-date">Salvo em mai 2026</div>
+        </div>
+        <span class="trip-badge done">Salvo</span>
+      </div>
+      <div class="trip-card-body">
+        <div class="trip-stats">
+          <div class="trip-stat"><div class="trip-stat-val">1.240km</div><div class="trip-stat-label">Distância</div></div>
+          <div class="trip-stat"><div class="trip-stat-val">5</div><div class="trip-stat-label">Dias</div></div>
+        </div>
+      </div>
+    </div>
+    <button class="btn-primary" onclick="window.parent.goto('nova1')">＋ Nova Viagem</button>
+  </div>
+  <nav class="bottom-nav">
+    <button class="nav-item  active" onclick="window.parent.goto('home')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+      Início
+    </button>
+    <button class="nav-item" onclick="window.parent.goto('realizadas')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+      Viagens
+    </button>
+    <button class="nav-item" onclick="window.parent.goto('ativa')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="3 11 22 2 13 21 11 13 3 11"/></svg>
+      Em Moto
+    </button>
+    <button class="nav-item" onclick="window.parent.goto('perfil')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+      Perfil
+    </button>
+  </nav>
+</body></html>

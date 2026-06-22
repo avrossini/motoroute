@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="pt-BR"><head><meta charset="UTF-8"><meta name="viewport" content="width=375"><link rel="stylesheet" href="../css/mobile.css"></head>
+<body>
+  <div class="status-bar dark">
+    <div class="notch"></div>
+    <span>9:41</span>
+    <div class="status-icons"><span>●●●</span><span>WiFi</span><span>🔋</span></div>
+  </div>
+  <div class="screen-content">
+    <div class="ativa-header">
+      <div class="ativa-day-label">DIA 1 · 25 JUN · QUINTA</div>
+      <div class="ativa-route">São Paulo → Pindamonhangaba</div>
+    </div>
+    <div class="ativa-card">
+      <div class="ativa-card-header">
+        <div class="ativa-next-label">PRÓXIMA PARADA</div>
+        <div class="ativa-next-dest">Jacareí</div>
+        <div class="ativa-next-state">Via Rodovia Presidente Dutra</div>
+      </div>
+      <div class="ativa-stats-row">
+        <div class="ativa-stat"><span class="ativa-stat-val">47</span><span class="ativa-stat-unit">km</span><div class="ativa-stat-label">restantes</div></div>
+        <div class="ativa-sep"></div>
+        <div class="ativa-stat"><span class="ativa-stat-val">38</span><span class="ativa-stat-unit">min</span><div class="ativa-stat-label">estimado</div></div>
+        <div class="ativa-sep"></div>
+        <div class="ativa-stat"><span class="ativa-stat-val">110</span><span class="ativa-stat-unit">km/h</span><div class="ativa-stat-label">velocidade</div></div>
+      </div>
+      <div class="ativa-weather">
+        <span style="font-size:18px">⛅</span>
+        <div class="ativa-weather-text"><strong>26°C</strong> · Parcialmente nublado · Vento 15km/h</div>
+      </div>
+    </div>
+    <div class="ativa-alert">
+      <span style="font-size:18px">⚠️</span>
+      <div class="ativa-alert-text"><strong>Atenção amanhã:</strong> Chuva prevista no trecho Pinda→Cunha. Considere sair mais cedo.</div>
+    </div>
+    <div class="ativa-progress">
+      <div class="ativa-progress-label">Progresso do dia</div>
+      <div class="ativa-bar"><div class="ativa-fill"></div></div>
+      <div class="ativa-stops">
+        <div class="ativa-stop-item"><div class="ativa-stop-dot dot-done"></div><div class="ativa-stop-name">São Paulo</div></div>
+        <div class="ativa-stop-item"><div class="ativa-stop-dot dot-current"></div><div class="ativa-stop-name" style="color:#fff">Jacareí</div></div>
+        <div class="ativa-stop-item"><div class="ativa-stop-dot dot-ahead"></div><div class="ativa-stop-name">Posto</div></div>
+        <div class="ativa-stop-item"><div class="ativa-stop-dot dot-ahead"></div><div class="ativa-stop-name">Pinda</div></div>
+      </div>
+    </div>
+    <button class="nav-btn-big">🧭 Navegar para Jacareí</button>
+    <button class="checkin-btn">✓ Check-in nesta parada</button>
+    <button class="skip-stop-btn" onclick="window.parent.goto('roteiro')">Pular esta parada</button>
+  </div>
+  <nav class="bottom-nav dark">
+    <button class="nav-item" onclick="window.parent.goto('home')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+      Início
+    </button>
+    <button class="nav-item" onclick="window.parent.goto('realizadas')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+      Viagens
+    </button>
+    <button class="nav-item  active" onclick="window.parent.goto('ativa')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="3 11 22 2 13 21 11 13 3 11"/></svg>
+      Em Moto
+    </button>
+    <button class="nav-item" onclick="window.parent.goto('perfil')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4

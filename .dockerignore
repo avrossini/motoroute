@@ -1,0 +1,16 @@
+node_modules
+.expo
+dist
+web-build
+.git
+.gitignore
+*.md
+docs
+prototype
+docker/kong.yml
+docker/db
+supabase
+.env
+.env.local
+.env.production
+.env.example

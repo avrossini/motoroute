@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="pt-BR"><head><meta charset="UTF-8"><meta name="viewport" content="width=375"><link rel="stylesheet" href="../css/mobile.css"></head>
+<body>
+  <div class="status-bar light">
+    <div class="notch"></div>
+    <span>9:41</span>
+    <div class="status-icons"><span>●●●</span><span>WiFi</span><span>🔋</span></div>
+  </div>
+  <div class="screen-content">
+    <div class="form-header">
+      <button class="back-btn" onclick="window.parent.goto('home')">←</button>
+      <div class="form-header-title">Nova Viagem</div>
+    </div>
+    <div class="step-indicator">
+      <div class="step-dot current">1</div>
+      <div class="step-line"></div>
+      <div class="step-dot pending">2</div>
+      <div class="step-line"></div>
+      <div class="step-dot pending">3</div>
+    </div>
+    <div class="section-label">TIPO DE VIAGEM</div>
+    <div class="type-selector">
+      <div class="type-option" id="type-role" onclick="selectType('role')">
+        <div class="type-option-icon">🏍️</div>
+        <div class="type-option-label">Rolê</div>
+        <div class="type-option-sub">Sem hotel · no mesmo dia</div>
+      </div>
+      <div class="type-option selected" id="type-expedicao" onclick="selectType('expedicao')">
+        <div class="type-option-icon">🗺️</div>
+        <div class="type-option-label">Expedição</div>
+        <div class="type-option-sub">Com hotel · vários dias</div>
+      </div>
+    </div>
+    <div id="role-sub-block" style="display:none">
+      <div class="section-label">IDA E VOLTA?</div>
+      <div class="type-selector">
+        <div class="type-option selected" id="role-ida-volta" onclick="selectReturn(true)">
+          <div class="type-option-icon">🔁</div>
+          <div class="type-option-label">Ida e volta</div>
+          <div class="type-option-sub">App planeja os 2 trechos</div>
+        </div>
+        <div class="type-option" id="role-so-ida" onclick="selectReturn(false)">
+          <div class="type-option-icon">➡️</div>
+          <div class="type-option-label">Só ida</div>
+          <div class="type-option-sub">Sem volta planejada</div>
+        </div>
+      </div>
+    </div>
+    <div class="form-group">
+      <div class="form-label">Nome da viagem</div>
+      <input class="form-input filled" type="text" value="Serra da Mantiqueira">
+    </div>
+    <div class="form-group">
+      <div class="form-label">Ponto de Partida</div>
+      <input class="form-input filled" type="text" value="São Paulo, SP">
+    </div>
+    <div class="for

@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="pt-BR"><head><meta charset="UTF-8"><meta name="viewport" content="width=1100"><link rel="stylesheet" href="../css/web.css"></head>
+<body>
+<div class="app">
+  <aside class="sidebar">
+    <div class="sidebar-logo"><div class="sidebar-logo-name">Moto<span>Route</span></div><div class="sidebar-logo-sub">PLANNER WEB</div></div>
+    <nav class="sidebar-nav"><div class="sidebar-section">Autenticação</div><a class="sidebar-item" href="login.html">🔑 Login</a><div class="sidebar-section">Planejamento</div><a class="sidebar-item" href="dashboard.html">🏠 Dashboard</a><a class="sidebar-item" href="nova-viagem.html">＋ Nova Viagem</a><a class="sidebar-item" href="roteiro.html">🗺️ Roteiro</a><a class="sidebar-item" href="salvos.html">💾 Roteiros Salvos</a><a class="sidebar-item" href="realizadas.html">🏁 Viagens Realizadas</a><div class="sidebar-section">Perfil</div><a class="sidebar-item" href="perfil.html">👤 Perfil</a><a class="sidebar-item" href="minha-moto.html">🏍️ Minha Moto</a><a class="sidebar-item" href="favoritas.html">⭐ Favoritas</a><a class="sidebar-item active" href="preferencias.html">⚙️ Preferências</a></nav>
+    <div class="sidebar-bottom"><div class="sidebar-user"><div class="sidebar-avatar">A</div><div><div class="sidebar-user-name">André R.</div><div class="sidebar-user-role">Moto: CB 500F</div></div></div></div>
+  </aside>
+  <div class="main">
+    <div class="topbar"><div><div class="topbar-title">Preferências Padrão</div></div>
+<div class="topbar-spacer"></div>
+<button class="topbar-btn primary">Salvar preferências</button></div>
+    <div class="content"><div class="settings-grid">
+  <div class="settings-menu">
+    <div class="settings-menu-item" onclick="window.location='perfil.html'"><span class="settings-menu-icon">👤</span>Dados pessoais</div>
+    <div class="settings-menu-item" onclick="window.location='minha-moto.html'"><span class="settings-menu-icon">🏍️</span>Minha Moto</div>
+    <div class="settings-menu-item" onclick="window.location='favoritas.html'"><span class="settings-menu-icon">⭐</span>Paradas Favoritas</div>
+    <div class="settings-menu-item active"><span class="settings-menu-icon">⚙️</span>Preferências</div>
+  </div>
+  <div class="settings-panel">
+    <div class="form-section">
+      <div class="form-section-title">📏 Planejamento</div>
+      <div class="form-grid">
+        <div class="form-field"><label>Parada mínima (km)</label><input type="number" value="100"></div>
+        <div class="form-field"><label>Parada máxima (km)</label><input type="number" value="200"></div>
+        <div class="form-field"><label>Horário de saída padrão</label><input type="time" value="07:00"></div>
+        <div class="form-field"><label>Alerta combustível (km)</label><input type="number" value="80"></div>
+      </div>
+    </div>
+    <div class="form-section">
+      <div class="form-section-title">🗺️ Preferências de rota</div>
+      <div style="display:flex;flex-direction:column;gap:12px">
+        <label style="display:flex;align-items:center;justify-content:space-between;cursor:pointer"><div><div style="font-size:13px;font-weight:600;color:#1A1A1A">🏔️ Preferir estradas cênicas</div><div style="font-size:11px;color:#888">Evitar rodovias quando possível</div></div><div style="width:42px;height:22px;border-radius:11px;background:#C97826;position:relative;flex-shrink:0"><div style="width:18px;height:18px;background:#fff;border-radius:9px;position:absolute;right:2px;top:2px;box-shadow:0 1px 3px rgba(0,0,0,.2)"></div></div></label>
+        <label style="display:flex;align-items:center;justify-content:space-between;cursor:pointer"><div><div style="font-size:13px;font-weight:600;color:#1A1A1A">🚧 Evitar pedágio</div></div><div style="width:42px;height:22px;border-radius:11px;background:#ddd;position:relative;flex-shrink:0"><div style="width:18px;height:18px;background:#fff;border-radius:9px;position:absolute;left:2px;top:2px;box-shadow:0 1px 3px rgba(0,0,0,.2)"></div></div></label>
+        <label style="display:flex;align-items:center;justify-content:space-between;cursor:pointer"><div><div style="font-size:13px;font-weight:600;color:#1A1A1A">🏕️ Aceitar estradas de terra</div></div><div style="width:42px;height:22px;border-radius:11px;background:#ddd;position:relative;flex-shrink:0"><div style="width:18px;height:18px;background:#fff;border-radius:9px;position:absolute;left:2px;top:2px;box-shadow:0 1px 3px rgba(0,0,0,.2)"></div></div></label>
+      </div>
+    </div>
+    <div class="form-section">
+      <div class="form-section-title">🌤️ Alertas de clima</div>
+      <div class="form-grid">
+        <div class="form-field"><label>Alertar chuva acima de (%)</label><input type="number" value="40"></div>
+        <div class="form-field"><label>Alertar vento acima de (km/h)</label><input type="number" value="50"></div>
+      </div>
+    </div>
+    <div class="form-section">
+      <div class="form-section-title">📍 Paradas automáticas</div>
+      <div style="font-size:12px;color:#888;margin-bottom:10px">Tipos de parada incluídas automaticamente nos roteiros</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <span style="background:#1A1A1A;color:#fff;border-radius:20px;padding:7px 14px;font-size:12px;font-weight:700;cursor:pointer">✓ ☕ Café</span>
+        <span style="background:#1A1A1A;color:#fff;border-radius:20px;padding:7px 14px;font-size:12px;font-weight:700;cursor:pointer">✓ ⛽ Posto</span>
+        <span style="background:#1A1A1A;color:#fff;border-radius:20px;padding:7px 14px;font-size:12px;font-weight:700;cursor:pointer">✓ 🅿️ Pátio moto</span>
+        <span style="background:#eee;color:#555;border-radius:20px;padding:7px 14px;font-size:12px;font-weight:700;cursor:pointer">🍽️ Restaurante</span>
+        <span style="background:#eee;color:#555;border-radius:20px;padding:7px 14px;font-size:12px;font-weight:700;cursor:pointer">🏨 Pousada</span>
+      </div>
+    </div>
+    <div class="form-actions"><button class="btn prima

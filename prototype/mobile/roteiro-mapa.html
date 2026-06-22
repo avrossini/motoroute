@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="pt-BR"><head><meta charset="UTF-8"><meta name="viewport" content="width=375"><link rel="stylesheet" href="../css/mobile.css"></head>
+<body>
+  <div class="status-bar light">
+    <div class="notch"></div>
+    <span>9:41</span>
+    <div class="status-icons"><span>●●●</span><span>WiFi</span><span>🔋</span></div>
+  </div>
+  <div class="screen-content">
+    <div class="roteiro-header">
+      <button class="back-btn" onclick="window.parent.goto('home')" style="background:rgba(255,255,255,.15);color:#fff">←</button>
+      <div style="margin-top:10px">
+        <div class="roteiro-name">Serra da Mantiqueira</div>
+        <div class="roteiro-title">São Paulo → Campos do Jordão</div>
+        <div class="roteiro-meta">847km · 3 dias · 12 paradas</div>
+      </div>
+    </div>
+    <div class="view-toggle">
+      <button class="toggle-btn" onclick="window.parent.goto('roteiro')">📋 Lista</button>
+      <button class="toggle-btn active">🗺️ Mapa</button>
+    </div>
+    <div style="flex:1;background:#d8e8d0;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:12px;color:#666;font-size:13px;margin:8px 16px;border-radius:16px;min-height:360px">
+      <div style="font-size:48px">🗺️</div>
+      <div style="font-weight:700">Visualização do Mapa</div>
+      <div style="font-size:11px;color:#888;text-align:center;padding:0 20px">Google Maps com rota traçada,<br>paradas marcadas e alertas de clima</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:center;padding:0 16px">
+        <span style="background:#fff;border-radius:20px;padding:4px 10px;font-size:11px;font-weight:700;color:#1A1A1A">🏁 SP</span>
+        <span style="background:#fff;border-radius:20px;padding:4px 10px;font-size:11px;font-weight:700;color:#C97826">● Pinda</span>
+        <span style="background:#fff;border-radius:20px;padding:4px 10px;font-size:11px;font-weight:700;color:#C97826">● Cunha</span>
+        <span style="background:#fff;border-radius:20px;padding:4px 10px;font-size:11px;font-weight:700;color:#16A34A">🏁 CJ</span>
+      </div>
+    </div>
+    <div style="padding:0 16px 12px;display:flex;gap:10px">
+      <button class="btn-primary" style="margin:0;flex:1" onclick="window.parent.goto('ativa')">🏍️ Iniciar Viagem</button>
+      <button class="btn-secondary" style="margin:0;flex:0;padding:14px 16px" onclick="window.parent.goto('roteiro')">📋</button>
+    </div>
+  </div>
+  <nav class="bottom-nav">
+    <button class="nav-item" onclick="window.parent.goto('home')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+      Início
+    </button>
+    <button class="nav-item  active" onclick="window.parent.goto('realizadas')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+      Viagens
+    </button>
+    <button class="nav-item" onclick="window.parent.goto('ativa')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="3 11 22 2 13 21 11 13 3 11"/></svg>
+      Em Moto
+    </button>
+    <button class="nav-item" onclick="window.parent.goto('perfil')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+      Perfil
+    </button>
+  </nav>
+</body></html>

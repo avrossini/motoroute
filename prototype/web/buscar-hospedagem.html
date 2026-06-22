@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="pt-BR"><head><meta charset="UTF-8"><link rel="stylesheet" href="../css/web.css"></head>
+<body>
+<div class="app">
+  <aside class="sidebar">
+    <div class="sidebar-logo"><div class="sidebar-logo-name">Moto<span>Route</span></div><div class="sidebar-logo-sub">PLANNER WEB</div></div>
+    <nav class="sidebar-nav"><div class="sidebar-section">Autenticação</div><a class="sidebar-item" href="login.html">🔑 Login</a><div class="sidebar-section">Planejamento</div><a class="sidebar-item" href="dashboard.html">🏠 Dashboard</a><a class="sidebar-item" href="nova-viagem.html">＋ Nova Viagem</a><a class="sidebar-item active" href="roteiro.html">🗺️ Roteiro</a><a class="sidebar-item" href="salvos.html">💾 Roteiros Salvos</a><a class="sidebar-item" href="realizadas.html">🏁 Viagens Realizadas</a><div class="sidebar-section">Perfil</div><a class="sidebar-item" href="perfil.html">👤 Perfil</a><a class="sidebar-item" href="minha-moto.html">🏍️ Minha Moto</a><a class="sidebar-item" href="favoritas.html">⭐ Favoritas</a><a class="sidebar-item" href="preferencias.html">⚙️ Preferências</a></nav>
+    <div class="sidebar-bottom"><div class="sidebar-user"><div class="sidebar-avatar">A</div><div><div class="sidebar-user-name">André R.</div><div class="sidebar-user-role">Moto: CB 500F</div></div></div></div>
+  </aside>
+  <div class="main">
+    <div class="topbar"><div>
+  <div class="topbar-title">Buscar Hospedagem — Dia 1</div>
+  <div class="topbar-sub">Serra da Mantiqueira · pernoite em Pindamonhangaba</div>
+</div>
+<div class="topbar-spacer"></div>
+<button class="topbar-btn secondary" onclick="window.location='roteiro.html'">← Voltar ao roteiro</button></div>
+    <div class="content"><div style="display:grid;grid-template-columns:340px 1fr;gap:16px">
+  <!-- Painel de busca -->
+  <div>
+    <div class="form-section">
+      <div class="form-section-title">📍 Local de pernoite</div>
+      <div class="form-field" style="margin-bottom:10px">
+        <label>Cidade ou endereço</label>
+        <input type="text" value="Pindamonhangaba, SP">
+      </div>
+      <div style="background:#EFF6FF;border-radius:9px;padding:9px 12px;font-size:12px;color:#2563EB;margin-bottom:12px">
+        📐 Usando o <strong>centro de Pindamonhangaba</strong> como referência. Para refinar, informe um endereço específico.
+      </div>
+      <div class="form-field" style="margin-bottom:10px">
+        <label>Ordenar por</label>
+        <select><option>Distância do ponto</option><option>Avaliação</option><option>Preço (menor)</option><option>Preço (maior)</option></select>
+      </div>
+      <div class="form-field" style="margin-bottom:12px">
+        <label>Faixa de preço</label>
+        <select><option>Qualquer</option><option>Até R$200/noite</option><option>R$200–400/noite</option><option>Acima de R$400/noite</option></select>
+      </div>
+      <button class="topbar-btn primary" style="width:100%;justify-content:center">🔍 Buscar opções</button>
+    </div>
+    <div class="form-section" style="background:#F0FDF4;border:1px solid #BBF7D0">
+      <div class="form-section-title" style="color:#16A34A">✓ Selecionada</div>
+      <div style="font-size:14px;font-weight:700;color:#1A1A1A">Pousada da Serra</div>
+      <div style="font-size:12px;color:#888;margin-top:3px">★ 4,7 · R$280/noite · 0,4km</div>
+      <div style="display:flex;gap:8px;margin-top:10px">
+        <button style="flex:1;border:none;border-radius:8px;padding:8px;font-size:12px;font-weight:700;background:#16A34A;color:#fff;cursor:pointer">✓ Marcar como reservado</button>
+        <button style="border:none;border-radius:8px;padding:8px 12px;font-size:12px;font-weight:700;background:#f0f0f0;color:#888;cursor:pointer">Trocar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Lista de resultados -->
+  <div>
+    <div style="font-size:12px;color:#888;margin-bottom:12px">6 opções encontradas · ordenadas por distância do centro de Pindamonhangaba</div>
+    <div class="data-table"><table>
+      <thead>
+        <tr>
+          <th>Hospedagem</th>
+          <th>Avaliação</th>
+          <th>Reviews</th>
+          <th>Preço/noite</th>
+          <th>Distância</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr style="background:#F0FDF4">
+          <td>
+            <div style="font-size:13px;font-weight:700;color:#1A1A1A">🏡 Pousada da Serra</div>
+            <div style="font-size:11px;color:#888">Rua das Bromélias, 122 · Pousada</div>
+          </td>
+          <td><span style="color:#C97826;font-weight:700">★ 4,7</span></td>
+          <td style="color:#888;font-size:12px">312</td>
+          <td style="font-weight:700;color:#16A34A">R$280</td>
+          <td><span style="background:#F0FDF4;color:#16A34A;font-size:11px;font-weight:700;padding:3px 8px;border-radius:20px">0,4km</span></td>
+          <td><span style="color:#16A34A;font-size:12px;font-weight:700">✓ Selecionada</span></td>
+        </tr>
+        <tr>
+          <td>
+            <div style="font-size:13px;font-weight:700;color:#1A1A1A">🏨 Hotel Mantiqueira Palace</div>
+            <div style="font-size:11px;color:#888">Av. Dr. Gaspar, 480 · Hotel</div>
+          </td>
+          <td><span style="color:#C97826;font-weight:700">★ 4,2</span></td>
+          <td style="color:#888;font-size:12px">88</td>
+          <td style="font-weight:700;color:#1A1A1A">R$220</td>
+          <td><span style="background:#EFF6FF;color:#2563EB;font-size:11px;font-weight:700;padding:3px 8px;border-radius:20px">1,1km</span></td>
+          <td><button style="font-size:11px;font-weight:700;padding:5px 10px;border:none;border-radius:7px;background:#F5E6D0;color:#C97826;cursor:pointer">Selecionar</button></td>
+        </tr>
+        <tr>
+          <td>
+            <div style="font-size:13px;font-weight:700;color:#1A1A1A">🌿 Recanto Verde Pousada</div>
+            <div style="font-size:11px;color:#888">Estrada do Recanto, km 3 · Pousada</div>
+          </td>
+          <td><span style="color:#C97826;font-weight:700">★ 4,9</span></td>
+          <td style="color:#888;font-size:12px">47</td>
+          <td style="font-weight:700;color:#1A1A1A">R$380</td>
+          <td><span style="background:#f0f0f0;color:#888;font-size:11px;font-weight:700;padding:3px 8px;border-radius:20px">3,2km</span></td>
+          <td><button style="font-size:11px;font-weight:700;padding:5px 10px;border:none;border-radius:7px;background:#F5E6D0;color:#C97826;cursor:pointer">Selecionar</button></td>
+        </tr>
+        <tr>
+          <td>
+            <div style="font-size:13px;font-weight:700;color:#1A1A1A">🏨 Ibis Pindamonhangaba</div>
+            <div style="font-size:11px;color:#888">Rod. Pres. Dutra, km 98 · Hotel</div>
+          </td>
+          <td><span style="color:#C97826;font-weight:700">★ 3,9</span></td>
+          <td style="color:#888;font-size:12px">204</td>
+          <td style="font-weight:700;color:#1A1A1A">R$175</td>
+          <td><span style="background:#f0f0f0;color:#888;font-size:11px;font-weight:700;padding:3px 8px;border-radius:20px">4,7km</span></td>
+          <td><button style="font-size:11px;font-weight:700;padding:5px 10px;border:none;border-radius:7px;background:#F5E6D0;color:#C97826;cursor:pointer">Selecionar</button></td>
+        </tr>
+        <tr>
+          <td>
+            <div style="font-size:13px;font-weight:700;color:#1A1A1A">🏡 Chalé Sítio das Flores</div>
+            <div style="font-size:11px;color:#888">Estrada Rural, s/n · Chalé</div>
+          </td>
+          <td><span style="color:#C97826;font-weight:700">★ 4,8</span></td>
+          <td style="color:#888;font-size:12px">23</td>
+          <td style="font-weight:700;color:#1A1A1A">R$450</td>
+          <td><span style="background:#f0f0f0;color:#888;font-size:11px;font-weight:700;padding:3px 8px;border-radius:20px">6,1km</span></td>
+          <td><button style="font-size:11px;font-weight:700;padding:5px 10px;border:none;border-radius:7px;background:#F5E6D0;color:#C97826;cursor:pointer">Selecionar</button></td>
+        </tr>
+        <tr>
+          <td>
+            <div style="font-size:13px;font-weight:700;color:#1A1A1A">🏨 Serra Premium Hotel</div>
+            <div style="font-size:11px;color:#888">Av. Faria Lima, 1200 · Hotel</div>
+          </td>
+          <td><span style="color:#C97826;font-weight:700">★ 4,4</span></td>
+          <td style="color:#888;font-size:12px">156</td>
+          <td style="font-weight:700;color:#1A1A1A">R$340</td>
+          <td><span style="background:#f0f0f0;color:#888;font-size:11px;font-weight:700;padding:3px 8px;border-radius:20px">8,3km</span></td>
+          <td><button style="font-size:11px;font-weight:700;padding:5px 10px;border:none;border-radius:7px;background:#F5E6D0;color:#C97826;cursor:pointer">Selecionar</button></td>
+        </tr>
+      </tbody>
+    </table></div>
+  </div>
+</div></div>
+  </div>
+</div>
+</body></html>                                                                                                                                           

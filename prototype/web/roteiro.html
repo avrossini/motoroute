@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="pt-BR"><head><meta charset="UTF-8"><meta name="viewport" content="width=1100"><link rel="stylesheet" href="../css/web.css"></head>
+<body>
+<div class="app">
+  <aside class="sidebar">
+    <div class="sidebar-logo"><div class="sidebar-logo-name">Moto<span>Route</span></div><div class="sidebar-logo-sub">PLANNER WEB</div></div>
+    <nav class="sidebar-nav"><div class="sidebar-section">Autenticação</div><a class="sidebar-item" href="login.html">🔑 Login</a><div class="sidebar-section">Planejamento</div><a class="sidebar-item" href="dashboard.html">🏠 Dashboard</a><a class="sidebar-item" href="nova-viagem.html">＋ Nova Viagem</a><a class="sidebar-item active" href="roteiro.html">🗺️ Roteiro</a><a class="sidebar-item" href="salvos.html">💾 Roteiros Salvos</a><a class="sidebar-item" href="realizadas.html">🏁 Viagens Realizadas</a><div class="sidebar-section">Perfil</div><a class="sidebar-item" href="perfil.html">👤 Perfil</a><a class="sidebar-item" href="minha-moto.html">🏍️ Minha Moto</a><a class="sidebar-item" href="favoritas.html">⭐ Favoritas</a><a class="sidebar-item" href="preferencias.html">⚙️ Preferências</a></nav>
+    <div class="sidebar-bottom"><div class="sidebar-user"><div class="sidebar-avatar">A</div><div><div class="sidebar-user-name">André R.</div><div class="sidebar-user-role">Moto: CB 500F</div></div></div></div>
+  </aside>
+  <div class="main">
+    <div class="topbar"><div><div class="topbar-title">Serra da Mantiqueira</div><div class="topbar-sub">São Paulo → Campos do Jordão · 25-28 jun 2026 · 847km</div></div>
+<div class="topbar-spacer"></div>
+<button class="topbar-btn secondary">💾 Salvar roteiro</button>
+<button class="topbar-btn secondary">✏️ Editar</button>
+<button class="topbar-btn primary">🏍️ Iniciar viagem</button></div>
+    <div class="content"><div class="alert warn" style="margin-bottom:14px"><span>⚠️</span><div class="alert-text"><strong>Alerta de chuva:</strong> Dia 2, trecho Pindamonhangaba→Cunha — 60% de precipitação. Considere sair mais cedo ou ajustar o roteiro.</div></div>
+<div style="display:grid;grid-template-columns:1fr 320px;gap:16px">
+  <div class="segment-builder">
+    <div class="segment-day">
+      <div class="segment-day-header"><span class="segment-day-title">📅 Dia 1 — 25 jun (Qui)</span><span class="segment-day-meta">São Paulo → Pindamonhangaba · 283km</span></div>
+      <div class="segment-row-web"><div class="seg-dot"></div><div class="seg-info"><div class="seg-route">São Paulo → Jacareí</div><div class="seg-meta">Saída 07:00 · Via Dutra</div><div class="seg-badges"><span class="seg-badge km">110km</span><span class="seg-badge time">1h20</span></div></div><div class="climate-web available" style="margin:0;min-width:200px"><span class="climate-web-icon">⛅</span><div class="climate-web-info"><div class="climate-web-main">26°C · Parcialmente nublado</div></div></div><div class="seg-actions"><button class="seg-action edit">✏️</button></div></div>
+      <div style="padding:0 16px"><div style="border-left:2px dashed #f0f0f0;margin-left:4px;padding:4px 16px;font-size:11px;color:#aaa">☕ Padaria Mantiqueira &nbsp;·&nbsp; ⛽ Posto Shell Km 87</div></div>
+      <div class="segment-row-web"><div class="seg-dot"></div><div class="seg-info"><div class="seg-route">Jacareí → Pindamonhangaba</div><div class="seg-meta">Saída 09:30 · Via Presidente Dutra</div><div class="seg-badges"><span class="seg-badge km">173km</span><span class="seg-badge time">2h10</span><span class="seg-badge mountain">⛰ Serrana</span></div></div><div class="climate-web available" style="margin:0;min-width:200px"><span class="climate-web-icon">☀️</span><div class="climate-web-info"><div class="climate-web-main">28°C · Ensolarado</div></div></div><div class="seg-actions"><button class="seg-action edit">✏️</button></div></div>
+      <!-- Pernoite Dia 1: Selecionada, não reservada -->
+      <div style="border-top:2px dashed #f0f0f0;background:linear-gradient(135deg,#1a1a2e,#16213e);padding:12px 16px;display:flex;align-items:center;gap:12px">
+        <div style="background:#C97826;border-radius:10px;width:40px;height:40px;display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0">🏡</div>
+        <div style="flex:1">
+          <div style="font-size:10px;font-weight:700;color:#888;text-transform:uppercase;letter-spacing:.8px;margin-bottom:3px">Pernoite — Dia 1</div>
+          <div style="font-size:14px;font-weight:700;color:#fff">Pousada da Serra</div>
+          <div style="font-size:11px;color:#aaa;margin-top:2px">★ 4,7 · 312 avaliações · R$280/noite · 0,4km do centro de Pindamonhangaba</div>
+        </div>
+        <div style="display:flex;gap:8px;flex-shrink:0">
+          <button style="background:#16A34A;color:#fff;border:none;border-radius:8px;padding:7px 14px;font-size:12px;font-weight:700;cursor:pointer">✓ Marcar como reservado</button>
+          <button style="background:#C97826;color:#fff;border:none;border-radius:8px;padding:7px 12px;font-size:12px;font-weight:700;cursor:pointer">🧭 Navegar</button>
+          <button style="background:#003580;color:#fff;border:none;border-radius:8px;padding:7px 12px;font-size:12px;font-weight:700;cursor:pointer">Booking.com</button>
+          <button style="background:rgba(255,255,255,.1);color:#ccc;border:none;border-radius:8px;padding:7px 12px;font-size:12px;font-weight:700;cursor:pointer" onclick="window.location='buscar-hospedagem.html'">Trocar</button>
+        </div>
+      </div>
+    </div>
+    <div class="segment-day">
+      <div class="segment-day-header"><span class="segment-day-title">📅 Dia 2 — 26 jun (Sex)</span><span class="segment-day-meta">Pindamonhangaba → Cunha · 198km ⚠️</span></div>
+      <div class="segment-row-web"><div class="seg-dot" style="background:#E53935"></div><div class="seg-info"><div class="seg-route">Pindamonhangaba → Cunha</div><div class="seg-meta">Saída 08:30 · Estrada da Cunha</div><div class="seg-badges"><span class="seg-badge km">198km</span><span class="seg-badge time">2h45</span><span class="seg-badge warn">⚠️ Chuva 60%</span></div></div><div class="climate-web warn" style="margin:0;min-width:200px"><span class="climate-web-icon">🌧️</span><div class="climate-web-info"><div class="climate-web-main">19°C · Chuva moderada</div></div></div><div class="seg-actions"><button class="seg-action edit">✏️</button></div></div>
+      <!-- Pernoite Dia 2: Reservada -->
+      <div style="border-top:2px dashed #f0f0f0;background:linear-gradient(135deg,#0a1f0a,#0f2d0f);padding:12px 16px;display:flex;align-items:center;gap:12px">
+        <div style="background:#16A34A;border-radius:10px;width:40px;height:40px;display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0">🏡</div>
+        <div style="flex:1">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:3px">
+            <div style="font-size:10px;font-weight:700;color:#4ade80;text-transform:uppercase;letter-spacing:.8px">Pernoite — Dia 2</div>
+            <span style="font-size:9px;font-weight:700;background:#16A34A;color:#fff;border-radius:20px;padding:2px 8px">✓ RESERVADO</span>
+          </div>
+          <div style="font-size:14px;font-weight:700;color:#fff">Pousada Cunha da Serra</div>
+          <div style="font-size:11px;color:#86efac;margin-top:2px">★ 4,6 · 89 avaliações · R$320/noite · 0,8km do centro de Cunha</div>
+        </div>
+        <div style="display:flex;gap:8px;flex-shrink:0">
+          <button style="background:#C97826;color:#fff;border:none;border-radius:8px;padding:7px 12px;font-size:12px;font-weight:700;cursor:pointer">🧭 Navegar</button>
+          <button style="background:#003580;color:#fff;border:none;border-radius:8px;padding:7px 12px;font-size:12px;font-weight:700;cursor:pointer">Booking.com</button>
+          <button style="background:rgba(255,255,255,.1);color:#aaa;border:none;border-radius:8px;padding:7px 12px;font-size:12px;font-weight:700;cursor:pointer">Desfazer / Trocar</button>
+        </div>
+      </div>
+    </div>
+    <div class="segment-day">
+      <div class="segment-day-header"><span class="segment-day-title">📅 Dia 3 — 27 jun (Sáb)</span><span class="segment-day-meta">Cunha → Campos do Jordão · 366km</span></div>
+      <div class="segment-row-web"><div class="seg-dot"></div><div class="seg-info"><div class="seg-route">Cunha → Campos do Jordão</div><div class="seg-meta">Saída 09:00 · Via SP-099</div><div class="seg-badges"><span class="seg-badge km">366km</span><span class="seg-badge time">4h30</span><span class="seg-badge mountain">⛰ Serrana</span></div></div><div class="climate-web locked" style="margin:0;min-width:200px"><span class="climate-web-icon">🔒</span><div class="climate-web-info"><div class="climate-web-main">Disponível em 8 dias</div></div></div><div class="seg-actions"><button class="seg-action edit">✏️</button></div></div>
+    </div>
+  </div>
+  <div style="display:flex;flex-direction:column;gap:14px">
+    <div class="card"><div class="card-header"><div class="card-title">📊 Resumo</div></div><div class="card-body" style="display:flex;flex-direction:column;gap:9px">
+      <div style="display:flex;justify-content:space-between;font-size:13px"><span style="color:#888">Distância total</span><strong>847km</strong></div>
+      <div style="display:flex;justify-content:space-between;font-size:13px"><span style="color:#888">Tempo de rodagem</span><strong>12h45</strong></div>
+      <div style="display:flex;justify-content:space-between;font-size:13px"><span style="color:#888">Paradas</span><strong>12</strong></div>
+      <div style="display:flex;justify-content:space-between;font-size:13px"><span style="color:#888">Hospedagens</span><strong>2 noites</strong></div>
+      <div style="display:flex;justify-content:space-between;font-size:13px"><span style="color:#888">Custo estimado</span><strong>R$1.200–1.600</strong></div>
+    </div></div>
+    <div class="card"><div class="card-header"><div class="card-title">🗺️ Mapa</div></div>
+    <div class="map-area" style="height:200px"><div class="map-placeholder"><div class="map-placeholder-icon">🗺️</div><div style="font-size:12px">Mapa interativo</div><div style="font-size:10px;color:#bbb;text-align:center">Google Maps com<br>rota e paradas</div></div></div></div>
+    <div class="card"><div class="card-header"><div class="card-title">📱 App mobile</div></div><div class="card-body"><div style="font-size:12px;color:#888;margin-bottom:10px">Este roteiro está sincronizado com o app. Inicie a viagem no celular quando estiver pronto.</div><div style="background:#f0f0f0;border-radius:9px;padding:10px;text-align:center;font-size:12px;color:#666">Abra o MotoRoute no celular →<br>Viagens → Serra da Mantiqueira</div></div></div>
+  </div>
+</div></div>
+  </div>
+</div>
+</body></html>                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     

@@ -1,0 +1,111 @@
+_format_version: "1.1"
+
+###############################################################################
+# Kong Declarative Config — MotoRoute
+# Funciona como proxy/gateway entre o client Supabase (ANON_KEY / SERVICE_KEY)
+# e os serviços internos (auth, rest, realtime, storage).
+###############################################################################
+
+services:
+
+  ## Auth (GoTrue) ─────────────────────────────────────────────────────────────
+  - name: auth-v1
+    _comment: "GoTrue: /auth/v1/* → http://auth:9999/*"
+    url: http://auth:9999/
+    routes:
+      - name: auth-v1-all
+        strip_path: true
+        paths:
+          - /auth/v1/
+    plugins:
+      - name: cors
+
+  ## REST (PostgREST) ──────────────────────────────────────────────────────────
+  - name: rest-v1
+    _comment: "PostgREST: /rest/v1/* → http://rest:3000/*"
+    url: http://rest:3000/
+    routes:
+      - name: rest-v1-all
+        strip_path: true
+        paths:
+          - /rest/v1/
+    plugins:
+      - name: cors
+      - name: key-auth
+        config:
+          hide_credentials: true
+
+  ## Realtime ──────────────────────────────────────────────────────────────────
+  - name: realtime-v1
+    _comment: "Realtime: /realtime/v1/* → http://realtime:4000/socket/*"
+    url: http://realtime:4000/socket/
+    routes:
+      - name: realtime-v1-all
+        strip_path: true
+        paths:
+          - /realtime/v1/
+    plugins:
+      - name: cors
+      - name: key-auth
+        config:
+          hide_credentials: true
+
+  ## Storage ───────────────────────────────────────────────────────────────────
+  - name: storage-v1
+    _comment: "Storage API: /storage/v1/* → http://storage:5000/*"
+    url: http://storage:5000/
+    routes:
+      - name: storage-v1-all
+        strip_path: true
+        paths:
+          - /storage/v1/
+    plugins:
+      - name: cors
+      - name: key-auth
+        config:
+          hide_credentials: true
+
+  ## Edge Functions ────────────────────────────────────────────────────────────
+  - name: functions-v1
+    _comment: "Edge Runtime: /functions/v1/* → http://functions:8080/*"
+    url: http://functions:9000/
+    routes:
+      - name: functions-v1-all
+        strip_path: true
+        paths:
+          - /functions/v1/
+    plugins:
+      - name: cors
+
+  ## Meta (pg-meta — usado pelo Studio) ────────────────────────────────────────
+  - name: meta
+    _comment: "pg-meta: /pg/* → http://meta:8080/*"
+    url: http://meta:8080/
+    routes:
+      - name: meta-all
+        strip_path: true
+        paths:
+          - /pg/
+    plugins:
+      - name: key-auth
+        config:
+          hide_credentials: true
+
+###############################################################################
+# Consumers — mapeiam as API keys do Supabase para roles do Kong
+###############################################################################
+consumers:
+  - username: anon
+    keyauth_credentials:
+      - key: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRFA0NiK7kyqd70ul-aqQVVwamFjdYoxB84L1TsWbH8
+
+  - username: service_role
+    keyauth_credentials:
+      - key: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImV4cCI6MTk4MzgxMjk5Nn0.EGIM96RAZx35lJzdJsyH-qQwv8Hj04zWl196z2-SBc0
+
+acls:
+  - consumer: anon
+    group: anon
+
+  - consumer: service_role
+    group: admin

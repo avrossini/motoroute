@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="pt-BR"><head><meta charset="UTF-8"><meta name="viewport" content="width=1100"><link rel="stylesheet" href="../css/web.css"></head>
+<body>
+<div class="app">
+  <aside class="sidebar">
+    <div class="sidebar-logo"><div class="sidebar-logo-name">Moto<span>Route</span></div><div class="sidebar-logo-sub">PLANNER WEB</div></div>
+    <nav class="sidebar-nav"><div class="sidebar-section">Autenticação</div><a class="sidebar-item" href="login.html">🔑 Login</a><div class="sidebar-section">Planejamento</div><a class="sidebar-item active" href="dashboard.html">🏠 Dashboard</a><a class="sidebar-item" href="nova-viagem.html">＋ Nova Viagem</a><a class="sidebar-item" href="roteiro.html">🗺️ Roteiro</a><a class="sidebar-item" href="salvos.html">💾 Roteiros Salvos</a><a class="sidebar-item" href="realizadas.html">🏁 Viagens Realizadas</a><div class="sidebar-section">Perfil</div><a class="sidebar-item" href="perfil.html">👤 Perfil</a><a class="sidebar-item" href="minha-moto.html">🏍️ Minha Moto</a><a class="sidebar-item" href="favoritas.html">⭐ Favoritas</a><a class="sidebar-item" href="preferencias.html">⚙️ Preferências</a></nav>
+    <div class="sidebar-bottom"><div class="sidebar-user"><div class="sidebar-avatar">A</div><div><div class="sidebar-user-name">André R.</div><div class="sidebar-user-role">Moto: CB 500F</div></div></div></div>
+  </aside>
+  <div class="main">
+    <div class="topbar"><div><div class="topbar-title">Dashboard</div><div class="topbar-sub">Bem-vindo de volta, André 👋</div></div>
+<div class="topbar-spacer"></div>
+<button class="topbar-btn primary" onclick="window.location='nova-viagem.html'">＋ Nova Viagem</button></div>
+    <div class="content"><div class="stat-cards">
+  <div class="stat-card"><div class="stat-card-icon">🏁</div><div class="stat-card-value">8</div><div class="stat-card-label">Viagens realizadas</div><div class="stat-card-sub">3 neste ano</div></div>
+  <div class="stat-card"><div class="stat-card-icon">📏</div><div class="stat-card-value">12.480</div><div class="stat-card-label">km rodados</div><div class="stat-card-sub">Em viagens planejadas</div></div>
+  <div class="stat-card"><div class="stat-card-icon">💾</div><div class="stat-card-value">4</div><div class="stat-card-label">Roteiros salvos</div><div class="stat-card-sub">Prontos para usar</div></div>
+  <div class="stat-card"><div class="stat-card-icon">⭐</div><div class="stat-card-value">11</div><div class="stat-card-label">Paradas favoritas</div><div class="stat-card-sub">Cafés, postos, pousadas</div></div>
+</div>
+<div class="two-col" style="margin-bottom:16px">
+  <div>
+    <div class="section-header"><span class="section-title">🗓️ Próxima viagem</span><a class="section-action" href="roteiro.html">Ver detalhes →</a></div>
+    <div class="card">
+      <div class="card-header"><div><div class="card-title">Serra da Mantiqueira</div><div class="card-sub">São Paulo → Campos do Jordão · 25-28 jun 2026</div></div><span class="badge planned">Planejada</span></div>
+      <div class="card-body">
+        <div style="display:flex;gap:20px;margin-bottom:12px">
+          <div><div style="font-size:20px;font-weight:800;color:#1A1A1A">847km</div><div style="font-size:10px;color:#888">Distância</div></div>
+          <div><div style="font-size:20px;font-weight:800;color:#1A1A1A">3 dias</div><div style="font-size:10px;color:#888">Duração</div></div>
+          <div><div style="font-size:20px;font-weight:800;color:#1A1A1A">12</div><div style="font-size:10px;color:#888">Paradas</div></div>
+        </div>
+        <div class="alert warn"><span>⚠️</span><div class="alert-text"><strong>Atenção:</strong> Chuva prevista no Dia 2 (Pinda→Cunha, 60%). Considere ajustar o roteiro.</div></div>
+      </div>
+      <div class="card-footer"><button class="card-btn primary" onclick="window.location='roteiro.html'">Ver roteiro completo</button><button class="card-btn secondary">✏️ Editar</button></div>
+    </div>
+  </div>
+  <div>
+    <div class="section-header"><span class="section-title">🌤️ Clima da próxima viagem</span></div>
+    <div class="card"><div class="card-body" style="display:flex;flex-direction:column;gap:8px">
+      <div class="climate-web available"><span class="climate-web-icon">☀️</span><div class="climate-web-info"><div class="climate-web-main">Dia 1 · SP → Pinda · 28°C ensolarado</div><div class="climate-web-sub">Atualizado há 2h</div></div></div>
+      <div class="climate-web warn"><span class="climate-web-icon">🌧️</span><div class="climate-web-info"><div class="climate-web-main">Dia 2 · Pinda → Cunha · 19°C chuva 60%</div><div class="climate-web-sub">Atenção: precipitação moderada</div></div></div>
+      <div class="climate-web locked"><span class="climate-web-icon">🔒</span><div class="climate-web-info"><div class="climate-web-main">Dia 3 · Cunha → CJ</div><div class="climate-web-sub">Disponível em 8 dias</div></div></div>
+    </div></div>
+  </div>
+</div>
+<div class="section-header"><span class="section-title">📋 Viagens recentes</span><a class="section-action" href="realizadas.html">Ver todas →</a></div>
+<div class="data-table"><table>
+  <thead><tr><th>Viagem</th><th>Rota</th><th>Data</th><th>km</th><th>Avaliação</th><th></th></tr></thead>
+  <tbody>
+    <tr><td><strong>Caminhos da Serra</strong></td><td>SP → Campos do Jordão</td><td>12-14 abr 2026</td><td>847</td><td>★★★★★</td><td><a href="roteiro.html" style="color:#C97826;font-size:12px;font-weight:700">Ver</a></td></tr>
+    <tr><td><strong>Litoral Verde</strong></td><td>SP → Ubatuba</td><td>15-17 mar 2026</td><td>620</td><td>★★★★☆</td><td><a href="roteiro.html" style="color:#C97826;font-size:12px;font-weight:700">Ver</a></td></tr>
+    <tr><td><strong>Vale do Paraíba</strong></td><td>SP → Guaratinguetá</td><td>10 fev 2026</td><td>380</td><td>—</td><td><a href="roteiro.html" style="color:#C97826;font-size:12px;font-weight:700">Ver</a></td></tr>
+  </tbody>
+</table></div></div>
+  </div>
+</div>
+</body></html>

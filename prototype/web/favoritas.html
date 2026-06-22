@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="pt-BR"><head><meta charset="UTF-8"><meta name="viewport" content="width=1100"><link rel="stylesheet" href="../css/web.css"></head>
+<body>
+<div class="app">
+  <aside class="sidebar">
+    <div class="sidebar-logo"><div class="sidebar-logo-name">Moto<span>Route</span></div><div class="sidebar-logo-sub">PLANNER WEB</div></div>
+    <nav class="sidebar-nav"><div class="sidebar-section">Autenticação</div><a class="sidebar-item" href="login.html">🔑 Login</a><div class="sidebar-section">Planejamento</div><a class="sidebar-item" href="dashboard.html">🏠 Dashboard</a><a class="sidebar-item" href="nova-viagem.html">＋ Nova Viagem</a><a class="sidebar-item" href="roteiro.html">🗺️ Roteiro</a><a class="sidebar-item" href="salvos.html">💾 Roteiros Salvos</a><a class="sidebar-item" href="realizadas.html">🏁 Viagens Realizadas</a><div class="sidebar-section">Perfil</div><a class="sidebar-item" href="perfil.html">👤 Perfil</a><a class="sidebar-item" href="minha-moto.html">🏍️ Minha Moto</a><a class="sidebar-item active" href="favoritas.html">⭐ Favoritas</a><a class="sidebar-item" href="preferencias.html">⚙️ Preferências</a></nav>
+    <div class="sidebar-bottom"><div class="sidebar-user"><div class="sidebar-avatar">A</div><div><div class="sidebar-user-name">André R.</div><div class="sidebar-user-role">Moto: CB 500F</div></div></div></div>
+  </aside>
+  <div class="main">
+    <div class="topbar"><div><div class="topbar-title">Paradas Favoritas</div><div class="topbar-sub">11 paradas salvas</div></div>
+<div class="topbar-spacer"></div>
+<div class="topbar-search">🔍 Buscar parada...</div>
+<button class="topbar-btn primary">＋ Adicionar</button></div>
+    <div class="content"><div class="settings-grid">
+  <div class="settings-menu">
+    <div class="settings-menu-item" onclick="window.location='perfil.html'"><span class="settings-menu-icon">👤</span>Dados pessoais</div>
+    <div class="settings-menu-item" onclick="window.location='minha-moto.html'"><span class="settings-menu-icon">🏍️</span>Minha Moto</div>
+    <div class="settings-menu-item active"><span class="settings-menu-icon">⭐</span>Paradas Favoritas</div>
+    <div class="settings-menu-item" onclick="window.location='preferencias.html'"><span class="settings-menu-icon">⚙️</span>Preferências</div>
+  </div>
+  <div>
+    <div class="section-header" style="margin-bottom:10px"><span class="section-title">☕ Gastronomia</span></div>
+    <div class="data-table" style="margin-bottom:16px"><table>
+      <thead><tr><th>Nome</th><th>Localização</th><th>Rating</th><th>Tags</th><th></th></tr></thead>
+      <tbody>
+        <tr><td><strong>☕ Café Colonial Mantiqueira</strong></td><td>Cunha, SP</td><td>★★★★★ 4.9</td><td><span class="badge orange">Vista serrana</span> <span class="badge orange">Moto friendly</span></td><td style="display:flex;gap:5px"><button style="font-size:11px;font-weight:700;padding:4px 8px;border:none;border-radius:6px;background:#F5E6D0;color:#C97826;cursor:pointer">＋ Roteiro</button><button style="font-size:11px;font-weight:700;padding:4px 8px;border:none;border-radius:6px;background:#FEE2E2;color:#E53935;cursor:pointer">🗑</button></td></tr>
+        <tr><td><strong>🍕 Pizzaria da Serra</strong></td><td>Pindamonhangaba, SP</td><td>★★★★☆ 4.6</td><td><span class="badge orange">Almoço</span></td><td style="display:flex;gap:5px"><button style="font-size:11px;font-weight:700;padding:4px 8px;border:none;border-radius:6px;background:#F5E6D0;color:#C97826;cursor:pointer">＋ Roteiro</button><button style="font-size:11px;font-weight:700;padding:4px 8px;border:none;border-radius:6px;background:#FEE2E2;color:#E53935;cursor:pointer">🗑</button></td></tr>
+      </tbody>
+    </table></div>
+    <div class="section-header" style="margin-bottom:10px"><span class="section-title">⛽ Postos</span></div>
+    <div class="data-table" style="margin-bottom:16px"><table>
+      <thead><tr><th>Nome</th><th>Localização</th><th>Rating</th><th>Tags</th><th></th></tr></thead>
+      <tbody>
+        <tr><td><strong>⛽ Posto Shell Km 87</strong></td><td>Rodovia Pres. Dutra</td><td>★★★★☆ 4.4</td><td><span class="badge orange">Aditivada</span> <span class="badge orange">24h</span></td><td style="display:flex;gap:5px"><button style="font-size:11px;font-weight:700;padding:4px 8px;border:none;border-radius:6px;background:#F5E6D0;color:#C97826;cursor:pointer">＋ Roteiro</button><button style="font-size:11px;font-weight:700;padding:4px 8px;border:none;border-radius:6px;background:#FEE2E2;color:#E53935;cursor:pointer">🗑</button></td></tr>
+      </tbody>
+    </table></div>
+    <div class="section-header" style="margin-bottom:10px"><span class="section-title">🏨 Pousadas</span></div>
+    <div class="data-table"><table>
+      <thead><tr><th>Nome</th><th>Localização</th><th>Preço/noite</th><th>Rating</th><th></th></tr></thead>
+      <tbody>
+        <tr><td><strong>🏨 Pousada da Serra</strong></td><td>Pindamonhangaba, SP</td><td>R$280</td><td>★★★★ 4.2</td><td style="display:flex;gap:5px"><button style="font-size:11px;font-weight:700;padding:4px 8px;border:none;border-radius:6px;background:#F5E6D0;color:#C97826;cursor:pointer">＋ Roteiro</button><button style="font-size:11px;font-weight:700;padding:4px 8px;border:none;border-radius:6px;background:#FEE2E2;color:#E53935;cursor:pointer">🗑</button></td></tr>
+      </tbody>
+    </table></div>
+  </div>
+</div></div>
+  </div>
+</div>
+</body></html>

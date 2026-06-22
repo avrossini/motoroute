@@ -1,0 +1,23 @@
+node_modules/
+.expo/
+dist/
+web-build/
+
+# Env — NUNCA commitar arquivos com chaves reais
+.env
+.env.local
+.env.production
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Docker — volumes e dados locais
+docker/volumes/
+
+# Supabase CLI (se usado para push de migrations)
+supabase/.branches
+supabase/.temp
+
+# Metro bundler — cache de transformações (gerado em dev, não versionar)
+.metro-cache/

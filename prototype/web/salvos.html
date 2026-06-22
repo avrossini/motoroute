@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="pt-BR"><head><meta charset="UTF-8"><meta name="viewport" content="width=1100"><link rel="stylesheet" href="../css/web.css"></head>
+<body>
+<div class="app">
+  <aside class="sidebar">
+    <div class="sidebar-logo"><div class="sidebar-logo-name">Moto<span>Route</span></div><div class="sidebar-logo-sub">PLANNER WEB</div></div>
+    <nav class="sidebar-nav"><div class="sidebar-section">Autenticação</div><a class="sidebar-item" href="login.html">🔑 Login</a><div class="sidebar-section">Planejamento</div><a class="sidebar-item" href="dashboard.html">🏠 Dashboard</a><a class="sidebar-item" href="nova-viagem.html">＋ Nova Viagem</a><a class="sidebar-item" href="roteiro.html">🗺️ Roteiro</a><a class="sidebar-item active" href="salvos.html">💾 Roteiros Salvos</a><a class="sidebar-item" href="realizadas.html">🏁 Viagens Realizadas</a><div class="sidebar-section">Perfil</div><a class="sidebar-item" href="perfil.html">👤 Perfil</a><a class="sidebar-item" href="minha-moto.html">🏍️ Minha Moto</a><a class="sidebar-item" href="favoritas.html">⭐ Favoritas</a><a class="sidebar-item" href="preferencias.html">⚙️ Preferências</a></nav>
+    <div class="sidebar-bottom"><div class="sidebar-user"><div class="sidebar-avatar">A</div><div><div class="sidebar-user-name">André R.</div><div class="sidebar-user-role">Moto: CB 500F</div></div></div></div>
+  </aside>
+  <div class="main">
+    <div class="topbar"><div><div class="topbar-title">Roteiros Salvos</div><div class="topbar-sub">4 roteiros · Prontos para usar</div></div>
+<div class="topbar-spacer"></div>
+<button class="topbar-btn primary" onclick="window.location='nova-viagem.html'">＋ Novo roteiro</button></div>
+    <div class="content"><div class="cards-grid">
+  <div class="card">
+    <div class="card-header"><div><div class="card-title">Serra da Mantiqueira</div><div class="card-sub">São Paulo → Campos do Jordão</div></div><span class="badge planned">Planejada</span></div>
+    <div class="card-body">
+      <div style="display:flex;gap:16px;margin-bottom:10px">
+        <div><div style="font-size:17px;font-weight:700">847km</div><div style="font-size:10px;color:#888">Distância</div></div>
+        <div><div style="font-size:17px;font-weight:700">3 dias</div><div style="font-size:10px;color:#888">Duração</div></div>
+        <div><div style="font-size:17px;font-weight:700">12</div><div style="font-size:10px;color:#888">Paradas</div></div>
+      </div>
+      <div class="climate-web warn" style="margin-bottom:0"><span class="climate-web-icon">⚠️</span><div class="climate-web-info"><div class="climate-web-main">Alerta: chuva prevista no Dia 2</div></div></div>
+    </div>
+    <div class="card-footer"><button class="card-btn primary" onclick="window.location='roteiro.html'">▶ Usar roteiro</button><button class="card-btn secondary">✏️ Editar</button><button class="card-btn danger" style="flex:0;padding:8px 12px">🗑</button></div>
+  </div>
+  <div class="card">
+    <div class="card-header"><div><div class="card-title">Litoral Sul</div><div class="card-sub">São Paulo → Florianópolis</div></div></div>
+    <div class="card-body">
+      <div style="display:flex;gap:16px;margin-bottom:10px">
+        <div><div style="font-size:17px;font-weight:700">1.240km</div><div style="font-size:10px;color:#888">Distância</div></div>
+        <div><div style="font-size:17px;font-weight:700">5 dias</div><div style="font-size:10px;color:#888">Duração</div></div>
+        <div><div style="font-size:17px;font-weight:700">18</div><div style="font-size:10px;color:#888">Paradas</div></div>
+      </div>
+      <div style="font-size:11px;color:#888">🔒 Clima disponível quando planejar data</div>
+    </div>
+    <div class="card-footer"><button class="card-btn primary">▶ Usar roteiro</button><button class="card-btn secondary">✏️ Editar</button><button class="card-btn danger" style="flex:0;padding:8px 12px">🗑</button></div>
+  </div>
+  <div class="card">
+    <div class="card-header"><div><div class="card-title">Circuito das Águas</div><div class="card-sub">SP → Lindoia → Amparo</div></div></div>
+    <div class="card-body">
+      <div style="display:flex;gap:16px">
+        <div><div style="font-size:17px;font-weight:700">420km</div><div style="font-size:10px;color:#888">Distância</div></div>
+        <div><div style="font-size:17px;font-weight:700">2 dias</div><div style="font-size:10px;color:#888">Duração</div></div>
+        <div><div style="font-size:17px;font-weight:700">8</div><div style="font-size:10px;color:#888">Paradas</div></div>
+      </div>
+    </div>
+    <div class="card-footer"><button class="card-btn primary">▶ Usar roteiro</button><button class="card-btn secondary">✏️ Editar</button><button class="card-btn danger" style="flex:0;padding:8px 12px">🗑</button></div>
+  </div>
+  <div class="card">
+    <div class="card-header"><div><div class="card-title">Caminhos da Serra Gaúcha</div><div class="card-sub">Porto Alegre → Gramado → Canela</div></div></div>
+    <div class="card-body">
+      <div style="display:flex;gap:16px">
+        <div><div style="font-size:17px;font-weight:700">680km</div><div style="font-size:10px;color:#888">Distância</div></div>
+        <div><div style="font-size:17px;font-weight:700">3 dias</div><div style="font-size:10px;color:#888">Duração</div></div>
+        <div><div style="font-size:17px;font-weight:700">10</div><div style="font-size:10px;color:#888">Paradas</div></div>
+      </div>
+    </div>
+    <div class="card-footer"><button class="card-btn primary">▶ Usar roteiro</button><button class="card-btn secondary">✏️ Editar</button><button class="card-btn danger" style="flex:0;padding:8px 12px">🗑</button></div>
+  </div>
+</div></div>
+  </div>
+</div>
+</body></html>

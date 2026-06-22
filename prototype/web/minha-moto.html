@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="pt-BR"><head><meta charset="UTF-8"><meta name="viewport" content="width=1100"><link rel="stylesheet" href="../css/web.css"></head>
+<body>
+<div class="app">
+  <aside class="sidebar">
+    <div class="sidebar-logo"><div class="sidebar-logo-name">Moto<span>Route</span></div><div class="sidebar-logo-sub">PLANNER WEB</div></div>
+    <nav class="sidebar-nav"><div class="sidebar-section">Autenticação</div><a class="sidebar-item" href="login.html">🔑 Login</a><div class="sidebar-section">Planejamento</div><a class="sidebar-item" href="dashboard.html">🏠 Dashboard</a><a class="sidebar-item" href="nova-viagem.html">＋ Nova Viagem</a><a class="sidebar-item" href="roteiro.html">🗺️ Roteiro</a><a class="sidebar-item" href="salvos.html">💾 Roteiros Salvos</a><a class="sidebar-item" href="realizadas.html">🏁 Viagens Realizadas</a><div class="sidebar-section">Perfil</div><a class="sidebar-item" href="perfil.html">👤 Perfil</a><a class="sidebar-item active" href="minha-moto.html">🏍️ Minha Moto</a><a class="sidebar-item" href="favoritas.html">⭐ Favoritas</a><a class="sidebar-item" href="preferencias.html">⚙️ Preferências</a></nav>
+    <div class="sidebar-bottom"><div class="sidebar-user"><div class="sidebar-avatar">A</div><div><div class="sidebar-user-name">André R.</div><div class="sidebar-user-role">Moto: CB 500F</div></div></div></div>
+  </aside>
+  <div class="main">
+    <div class="topbar"><div><div class="topbar-title">Minha Moto</div></div>
+<div class="topbar-spacer"></div>
+<button class="topbar-btn primary">✏️ Editar</button></div>
+    <div class="content"><div class="settings-grid">
+  <div class="settings-menu">
+    <div class="settings-menu-item" onclick="window.location='perfil.html'"><span class="settings-menu-icon">👤</span>Dados pessoais</div>
+    <div class="settings-menu-item active"><span class="settings-menu-icon">🏍️</span>Minha Moto</div>
+    <div class="settings-menu-item" onclick="window.location='favoritas.html'"><span class="settings-menu-icon">⭐</span>Paradas Favoritas</div>
+    <div class="settings-menu-item" onclick="window.location='preferencias.html'"><span class="settings-menu-icon">⚙️</span>Preferências</div>
+  </div>
+  <div class="settings-panel">
+    <div class="moto-card">
+      <div class="moto-avatar-web">🏍️</div>
+      <div style="flex:1">
+        <div class="moto-name-web">Honda CB 500F</div>
+        <div class="moto-sub-web">2022 · Vermelha · ABS</div>
+        <div class="moto-stat-web">
+          <div class="moto-stat-item"><div class="moto-stat-val-web">47.320</div><div class="moto-stat-label-web">km rodados</div></div>
+          <div class="moto-stat-item"><div class="moto-stat-val-web">22 km/l</div><div class="moto-stat-label-web">Consumo médio</div></div>
+          <div class="moto-stat-item"><div class="moto-stat-val-web">17L</div><div class="moto-stat-label-web">Tanque</div></div>
+          <div class="moto-stat-item"><div class="moto-stat-val-web">374km</div><div class="moto-stat-label-web">Autonomia est.</div></div>
+        </div>
+      </div>
+    </div>
+    <div class="form-section">
+      <div class="form-section-title">🔧 Especificações</div>
+      <div class="form-grid three">
+        <div class="form-field"><label>Marca</label><input value="Honda"></div>
+        <div class="form-field"><label>Modelo</label><input value="CB 500F"></div>
+        <div class="form-field"><label>Ano</label><input value="2022"></div>
+        <div class="form-field"><label>Cilindrada</label><input value="471cc"></div>
+        <div class="form-field"><label>Consumo (km/l)</label><input value="22"></div>
+        <div class="form-field"><label>Tanque (litros)</label><input value="17"></div>
+        <div class="form-field"><label>Km atual</label><input value="47320"></div>
+        <div class="form-field"><label>Próxima revisão (km)</label><input value="50000"></div>
+        <div class="form-field"><label>Cor</label><input value="Vermelha"></div>
+      </div>
+      <div class="form-actions"><button class="btn primary">Salvar</button></div>
+    </div>
+    <div class="form-section">
+      <div class="form-section-title">🎒 Equipamentos</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <span style="background:#1A1A1A;color:#fff;border-radius:20px;padding:6px 14px;font-size:12px;font-weight:700">✓ Baú lateral</span>
+        <span style="background:#1A1A1A;color:#fff;border-radius:20px;padding:6px 14px;font-size:12px;font-weight:700">✓ GPS integrado</span>
+        <span style="background:#1A1A1A;color:#fff;border-radius:20px;padding:6px 14px;font-size:12px;font-weight:700">✓ Protetor de motor</span>
+        <span style="background:#eee;color:#555;border-radius:20px;padding:6px 14px;font-size:12px;font-weight:700">Porta-malas</span>
+        <span style="background:#eee;color:#555;border-radius:20px;padding:6px 14px;font-size:12px;font-weight:700">Intercomunicador</span>
+        <button style="border:1.5px dashed #ccc;background:none;color:#C97826;border-radius:20px;padding:6px 14px;font-size:12px;font-weight:700;cursor:pointer">＋ Adicionar</button>
+      </div>
+    </div>
+  </div>
+</div></div>
+  </div>
+</div>
+</body></html>

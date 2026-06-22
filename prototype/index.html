@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MotoRoute Planner — Protótipo</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { background: #111827; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; display: flex; height: 100vh; overflow: hidden; }
+.nav-panel { width: 230px; background: #0f0f0f; display: flex; flex-direction: column; flex-shrink: 0; border-right: 1px solid #1f1f1f; }
+.nav-logo { padding: 20px 18px 16px; border-bottom: 1px solid #1a1a1a; }
+.nav-logo-name { font-size: 17px; font-weight: 800; color: #fff; }
+.nav-logo-name span { color: #C97826; }
+.nav-logo-sub { font-size: 10px; color: #444; margin-top: 3px; }
+.mode-toggle { display: flex; margin: 12px 14px; background: #1a1a1a; border-radius: 8px; padding: 2px; }
+.mode-btn { flex: 1; padding: 7px 4px; text-align: center; font-size: 11px; font-weight: 700; cursor: pointer; border-radius: 6px; color: #555; border: none; background: none; transition: all .2s; }
+.mode-btn.active { background: #C97826; color: #fff; }
+.nav-links { flex: 1; overflow-y: auto; padding: 4px 0; }
+.nav-links::-webkit-scrollbar { display: none; }
+.group-label { font-size: 9px; color: #333; text-transform: uppercase; letter-spacing: 1.2px; padding: 12px 18px 4px; }
+.nav-link { display: flex; align-items: center; gap: 9px; padding: 8px 18px; cursor: pointer; font-size: 12px; color: #666; width: 100%; text-align: left; border: none; background: none; transition: all .15s; }
+.nav-link:hover { background: #161616; color: #999; }
+.nav-link.active { background: #1a1200; color: #C97826; border-left: 2px solid #C97826; padding-left: 16px; }
+.frame-area { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 24px; overflow: auto; gap: 16px; }
+.device-label { color: #444; font-size: 10px; text-transform: uppercase; letter-spacing: 1px; }
+/* PHONE FRAME */
+.phone-frame { width: 375px; height: 812px; border-radius: 50px; overflow: hidden; box-shadow: 0 40px 100px rgba(0,0,0,.7), 0 0 0 10px #111, 0 0 0 12px #2a2a2a; flex-shrink: 0; }
+.phone-frame iframe { width: 100%; height: 100%; border: none; display: block; }
+/* BROWSER FRAME */
+.browser-frame { width: 1100px; border-radius: 10px; overflow: hidden; box-shadow: 0 30px 80px rgba(0,0,0,.6); background: #1e1e1e; flex-shrink: 0; display: none; }
+.browser-chrome { background: #2d2d2d; padding: 10px 14px; display: flex; align-items: center; gap: 10px; }
+.browser-dots { display: flex; gap: 6px; }
+.browser-dot { width: 12px; height: 12px; border-radius: 6px; }
+.d-red { background: #ff5f57; } .d-yellow { background: #ffbd2e; } .d-green { background: #28c840; }
+.browser-url { flex: 1; background: #3a3a3a; border-radius: 6px; padding: 5px 12px; font-size: 12px; color: #888; display: flex; align-items: center; gap: 7px; }
+.browser-body { height: 680px; overflow: hidden; }
+.browser-body iframe { width: 100%; height: 100%; border: none; display: block; }
+.screen-desc { color: #444; font-size: 11px; text-align: center; max-width: 500px; line-height: 1.5; }
+</style>
+</head>
+<body>
+<div class="nav-panel">
+  <div class="nav-logo">
+    <div class="nav-logo-name">Moto<span>Route</span></div>
+    <div class="nav-logo-sub">Monousuário + cópia</div>
+  </div>
+  <div class="mode-toggle">
+    <button class="mode-btn active" id="btnMobile" onclick="setMode('mobile')">📱 Mobile</button>
+    <button class="mode-btn" id="btnWeb" onclick="setMode('web')">💻 Web</button>
+  </div>
+  <div class="nav-links" id="navLinks"></div>
+</div>
+<div class="frame-area">
+  <div class="device-label" id="deviceLabel">iPhone 14 · 375 × 812</div>
+  <div class="phone-frame" id="phoneFrame">
+    <iframe id="mobileIframe" src="mobile/home.html"></iframe>
+  </div>
+  <div class="browser-frame" id="browserFrame">
+    <div class="browser-chrome">
+      <div class="browser-dots"><div class="browser-dot d-red"></div><div class="browser-dot d-yellow"></div><div class="browser-dot d-green"></div></div>
+      <div class="browser-url">🔒 <span id="urlBar">motoroute.app/dashboard</span></div>
+    </div>
+    <div class="browser-body"><iframe id="webIframe" src="web/dashboard.html"></iframe></div>
+  </div>
+  <div class="screen-desc" id="screenDesc"></div>
+</div>
+
+<script>
+const screens = {
+  mobile: [
+    { group: 'Autenticação', items: [
+      { id:'login', label:'🔑 Login', file:'mobile/login.html', url:'motoroute.app/login', desc:'Login com e-mail + senha ou Google OAuth. Supabase Auth por baixo dos panos.' },
+    ]},
+    { group: 'Fluxo principal', items: [
+      { id:'home', label:'🏠 Início', file:'mobile/home.html', url:'motoroute.app/', desc:'Viagem ativa + próximas viagens. FAB para criar nova.' },
+      { id:'nova1', label:'➕ Nova Viagem — Passo 1', file:'mobile/nova-viagem-1.html', url:'motoroute.app/nova', desc:'Nome (opcional), origem/destino, data, tipo (day trip / multi-dias), nº de dias.' },
+      { id:'nova2', label:'⚙️ Nova Viagem — Passo 2', file:'mobile/nova-viagem-2.html', url:'motoroute.app/nova/paradas', desc:'Paradas obrigatórias + regra de distância. Sem preferências de rota.' },
+      { id:'roteiro', label:'🗺️ Roteiro — Lista', file:'mobile/roteiro-lista.html', url:'motoroute.app/viagem/1', desc:'Toggle Lista/Mapa · botões + entre trechos · clima em 3 estados · Ver alternativas.' },
+      { id:'mapa', label:'📍 Roteiro — Mapa', file:'mobile/roteiro-mapa.html', url:'motoroute.app/viagem/1/mapa', desc:'Rota em laranja · toque para adicionar parada · long press para remover.' },
+      { id:'alternativas', label:'🔄 Alternativas de Parada', file:'mobile/alternativas.html', url:'motoroute.app/viagem/1/parada/1/alt', desc:'Até 5 opções por proximidade. Parada atual marcada com ✓.' },
+      { id:'ativa', label:'🏍️ Viagem Ativa', file:'mobile/viagem-ativa.html', url:'motoroute.app/ativa', desc:'Mobile only · Dark mode · km restantes, tempo, chegada · Navegar + check-in.' },
+    ]},
+    { group: 'Compartilhamento e avaliação', items: [
+      { id:'compartilhar', label:'📤 Compartilhar Viagem', file:'mobile/compartilhar.html', url:'motoroute.app/viagem/1/compartilhar', desc:'Enviar uma cópia independente do roteiro por e-mail, link ou WhatsApp. O destinatário se torna owner da cópia, com seus próprios parâmetros aplicados.' },
+      { id:'avaliar-parada', label:'⭐ Avaliar Parada', file:'mobile/avaliar-parada.html', url:'motoroute.app/viagem/1/parada/1/avaliar', desc:'Avaliação pessoal (1-5 estrelas) + comentário sobre a parada.' },
+      { id:'buscar-hospedagem', label:'🏨 Buscar Hospedagem', file:'mobile/buscar-hospedagem.html', url:'motoroute.app/viagem/1/hospedagem/1', desc:'Busca por cidade ou endereço. Lista ordenada por distância do ponto de referência (centro da cidade se só município informado). Avaliação + preço + "Marcar como reservado".' },
+    ]},
+    { group: 'Perfil', items: [
+      { id:'perfil', label:'👤 Perfil', file:'mobile/perfil.html', url:'motoroute.app/perfil', desc:'Hub de configurações. Todos os links clicáveis.' },
+      { id:'minhamoto', label:'🏍️ Minha Moto', file:'mobile/minha-moto.html', url:'motoroute.app/perfil/moto', desc:'Specs, consumo, autonomia estimada e próximas revisões.' },
+      { id:'favoritas', label:'⭐ Paradas Favoritas', file:'mobile/favoritas.html', url:'motoroute.app/perfil/favoritas', desc:'Postos e restaurantes salvos com ações rápidas.' },
+      { id:'preferencias', label:'⚙️ Preferências', file:'mobile/preferencias.html', url:'motoroute.app/perfil/preferencias', desc:'Padrões de parada, clima, velocidade e mapa.' },
+      { id:'realizadas', label:'📋 Viagens Realizadas', file:'mobile/realizadas.html', url:'motoroute.app/perfil/historico', desc:'Histórico com stats totais, avaliação e link para o roteiro.' },
+      { id:'salvos', label:'🗺️ Roteiros Salvos', file:'mobile/salvos.html', url:'motoroute.app/perfil/salvos', desc:'Roteiros planejados e rascunhos com ações de iniciar/editar/excluir.' },
+    ]},
+  ],
+  web: [
+    { group: 'Autenticação', items: [
+      { id:'login', label:'🔑 Login', file:'web/login.html', url:'motoroute.app/login', desc:'Login com e-mail + senha ou Google OAuth. Mesmo token de sessão sincronizado com o mobile.' },
+    ]},
+    { group: 'Planejamento', items: [
+      { id:'dashboard', label:'🏠 Dashboard', file:'web/dashboard.html', url:'motoroute.app/', desc:'Visão geral: stats, viagem ativa, próximas viagens, atalhos de planejamento.' },
+      { id:'nova', label:'➕ Nova Viagem', file:'web/nova-viagem.html', url:'motoroute.app/nova', desc:'Formulário completo em 2 passos com layout wide e preview do roteiro.' },
+      { id:'roteiro', label:'🗺️ Roteiro', file:'web/roteiro.html', url:'motoroute.app/viagem/1', desc:'Lista de trechos lado a lado com mapa. Clima, alternativas e hospedagem.' },
+      { id:'salvos', label:'🗺️ Roteiros Salvos', file:'web/salvos.html', url:'motoroute.app/salvos', desc:'Grid de roteiros planejados e rascunhos.' },
+      { id:'realizadas', label:'📋 Viagens Realizadas', file:'web/realizadas.html', url:'motoroute.app/historico', desc:'Tabela de viagens realizadas com stats e avaliações.' },
+      { id:'buscar-hospedagem', label:'🏨 Buscar Hospedagem', file:'web/buscar-hospedagem.html', url:'motoroute.app/viagem/1/hospedagem/1', desc:'Busca de hospedagem por cidade ou endereço. Tabela com distância, avaliação e preço. Seleção + marcar como reservado.' },
+    ]},
+    { group: 'Perfil', items: [
+      { id:'perfil', label:'👤 Perfil', file:'web/perfil.html', url:'motoroute.app/perfil', desc:'Dados da conta e configurações gerais.' },
+      { id:'minhamoto', label:'🏍️ Minha Moto', file:'web/minha-moto.html', url:'motoroute.app/perfil/moto', desc:'Specs, consumo, autonomia e revisões em layout wide.' },
+      { id:'favoritas', label:'⭐ Paradas Favoritas', file:'web/favoritas.html', url:'motoroute.app/perfil/favoritas', desc:'Grid de postos e restaurantes salvos.' },
+      { id:'preferencias', label:'⚙️ Preferências', file:'web/preferencias.html', url:'motoroute.app/perfil/preferencias', desc:'Configurações padrão do app em layout de settings.' },
+    ]},
+  ],
+};
+
+let mode = 'mobile';
+let currentId = 'home';
+
+function setMode(m) {
+  mode = m;
+  document.getElementById('btnMobile').classList.toggle('active', m === 'mobile');
+  document.getElementById('btnWeb').classList.toggle('active', m === 'web');
+  document.getElementById('phoneFrame').style.display = m === 'mobile' ? 'block' : 'none';
+  document.getElementById('browserFrame').style.display = m === 'web' ? 'block' : 'none';
+  document.getElementById('deviceLabel').textContent = m === 'mobile' ? 'iPhone 14 · 375 × 812' : 'Browser · 1100 × 680';
+  currentId = m === 'mobile' ? 'home' : 'dashboard';
+  renderNav();
+  loadScreen(currentId);
+}
+
+function renderNav() {
+  const html = screens[mode].map(g =>
+    `<div class="group-label">${g.group}</div>` +
+    g.items.map(i => `<button class="nav-link ${i.id===currentId?'active':''}" onclick="go('${i.id}')">${i.label}</button>`).join('')
+  ).join('');
+  document.getElementById('navLinks').innerHTML = html;
+}
+
+function loadScreen(id) {
+  const all = screens[mode].flatMap(g => g.items);
+  const item = all.find(i => i.id === id);
+  if (!item) return;
+  if (mode === 'mobile') {
+    document.getElementById('mobileIframe').src = item.file + '?t=' + Date.now();
+  } else {
+    document.getElementById('webIframe').src = item.file + '?t=' + Date.now();
+    document.getElementById('urlBar').textContent = item.url;
+  }
+  document.getElementById('screenDesc').textContent = item.desc;
+}
+
+function go(id) {
+  currentId = id;
+  renderNav();
+  loadScreen(id);
+}
+
+// Allow iframes to navigate parent
+window.goto = (id) => go(id);
+
+renderNav();
+loadScreen('home');
+</script>
+</body>
+</html>
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              
