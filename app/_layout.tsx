@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Platform } from "react-native";
 import { Stack, router, useSegments } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import * as SplashScreen from "expo-splash-screen";
@@ -23,23 +24,34 @@ function useAuthRedirect(session: Session | null, ready: boolean, isRecovery: bo
   }, [session, ready, segments, isRecovery]);
 }
 
-function getInitialRecovery() {
-  if (typeof window === "undefined") return false;
-  return window.location.hash.includes("type=recovery");
+function isRecoveryUrl() {
+  return (
+    Platform.OS === "web" &&
+    typeof window !== "undefined" &&
+    window.location.hash.includes("type=recovery")
+  );
 }
 
 export default function RootLayout() {
   const [session, setSession] = useState<Session | null>(null);
   const [ready, setReady] = useState(false);
-  const [isRecovery, setIsRecovery] = useState(getInitialRecovery);
+  const [isRecovery, setIsRecovery] = useState(false);
 
   useEffect(() => {
     const supabase = getSupabase();
 
     supabase.auth.getSession().then(({ data }) => {
       setSession(data.session);
-      setReady(true);
-      SplashScreen.hideAsync();
+
+      if (isRecoveryUrl()) {
+        setIsRecovery(true);
+        setReady(true);
+        SplashScreen.hideAsync();
+        router.replace("/(auth)/reset-password");
+      } else {
+        setReady(true);
+        SplashScreen.hideAsync();
+      }
     });
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, s) => {
