@@ -77,6 +77,35 @@ Se falhou, anote a mensagem de erro exata.
 
 ---
 
+### A5 — Recuperação de senha (esqueci minha senha)
+
+**Pré-condição:** usuário deslogado; acesso à caixa de e-mail da conta de teste  
+**Observação:** aguardar pelo menos 60 segundos desde o último envio para evitar rate limit do Supabase
+
+**Passos:**
+1. Na tela de login, tocar em "Esqueceu a senha?"
+2. Verificar que a tela "Recuperar senha" abre corretamente
+3. Digitar o e-mail da conta de teste
+4. Tocar em "Enviar link"
+5. Verificar que a mensagem de confirmação aparece em verde ("E-mail enviado! Verifique sua caixa de entrada...")
+6. Abrir o e-mail recebido e clicar no link de redefinição
+7. Verificar que o app/site abre na tela "Nova senha"
+8. Digitar uma nova senha (8+ caracteres) e confirmar
+9. Tocar em "Salvar nova senha"
+10. Verificar que a mensagem "Senha atualizada com sucesso!" aparece
+11. Tocar em "Ir para o login" e fazer login com a nova senha
+
+**Resultado esperado:**
+- Passo 4: mensagem verde de confirmação, formulário some, apenas o link "Voltar ao login" fica visível
+- Passo 7: app abre diretamente na tela "Nova senha" (não em Início)
+- Passo 10: confirmação de sucesso visível
+- Passo 11: login bem-sucedido com a nova senha; senha antiga não funciona mais
+
+**Erros conhecidos:**
+- HTTP 429 em "Enviar link" = rate limit atingido (aguardar ~60s e tentar novamente) — comportamento esperado do Supabase Free Tier
+
+---
+
 ## BLOCO B — Perfil e preferências
 
 ### B1 — Cadastrar moto
