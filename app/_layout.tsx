@@ -23,10 +23,15 @@ function useAuthRedirect(session: Session | null, ready: boolean, isRecovery: bo
   }, [session, ready, segments, isRecovery]);
 }
 
+function getInitialRecovery() {
+  if (typeof window === "undefined") return false;
+  return window.location.hash.includes("type=recovery");
+}
+
 export default function RootLayout() {
   const [session, setSession] = useState<Session | null>(null);
   const [ready, setReady] = useState(false);
-  const [isRecovery, setIsRecovery] = useState(false);
+  const [isRecovery, setIsRecovery] = useState(getInitialRecovery);
 
   useEffect(() => {
     const supabase = getSupabase();
