@@ -1,11 +1,10 @@
-import { useCallback, useState } from "react";
+import { useCallback, useState, useEffect } from "react";
 import {
   View,
   Text,
   TouchableOpacity,
   StyleSheet,
   ScrollView,
-  Alert,
 } from "react-native";
 import { router, useFocusEffect } from "expo-router";
 import { getSupabase } from "@/services/supabase";
@@ -31,12 +30,17 @@ export default function PerfilScreen() {
   const [user, setUser] = useState<UserInfo | null>(null);
   const [moto, setMoto] = useState<Motorcycle | null>(null);
   const [loading, setLoading] = useState(true);
+  const [confirmLogout, setConfirmLogout] = useState(false);
 
   useFocusEffect(
     useCallback(() => {
       load();
     }, [])
   );
+
+  useEffect(() => {
+    load();
+  }, []);
 
   async function load() {
     setLoading(true);
@@ -60,18 +64,9 @@ export default function PerfilScreen() {
   }
 
   async function signOut() {
-    Alert.alert("Sair da conta", "Deseja mesmo sair?", [
-      { text: "Cancelar", style: "cancel" },
-      {
-        text: "Sair",
-        style: "destructive",
-        onPress: async () => {
-          const supabase = getSupabase();
-          await supabase.auth.signOut();
-          router.replace("/login" as never);
-        },
-      },
-    ]);
+    const supabase = getSupabase();
+    await supabase.auth.signOut();
+    router.replace("/(auth)/login" as never);
   }
 
   const avatarLetter = user?.name?.[0]?.toUpperCase() ?? "?";
@@ -141,10 +136,24 @@ export default function PerfilScreen() {
       </View>
 
       <View style={styles.section}>
-        <TouchableOpacity style={styles.signOutBtn} onPress={signOut}>
-          <Text style={styles.signOutIcon}>🚪</Text>
-          <Text style={styles.signOutText}>Sair da conta</Text>
-        </TouchableOpacity>
+        {confirmLogout ? (
+          <View style={styles.confirmBox}>
+            <Text style={styles.confirmText}>Deseja mesmo sair?</Text>
+            <View style={styles.confirmBtns}>
+              <TouchableOpacity onPress={() => setConfirmLogout(false)} style={styles.confirmCancel}>
+                <Text style={styles.confirmCancelText}>Cancelar</Text>
+              </TouchableOpacity>
+              <TouchableOpacity onPress={signOut} style={styles.confirmSair}>
+                <Text style={styles.confirmSairText}>Sair</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        ) : (
+          <TouchableOpacity style={styles.signOutBtn} onPress={() => setConfirmLogout(true)}>
+            <Text style={styles.signOutIcon}>🚪</Text>
+            <Text style={styles.signOutText}>Sair da conta</Text>
+          </TouchableOpacity>
+        )}
       </View>
     </ScrollView>
   );
@@ -243,4 +252,12 @@ const styles = StyleSheet.create({
   },
   signOutIcon: { fontSize: 20 },
   signOutText: { fontSize: 15, color: "#E53935", fontWeight: "600" },
+
+  confirmBox: { backgroundColor: "#fff", borderRadius: 12, padding: 16 },
+  confirmText: { fontSize: 15, color: "#1A1A1A", marginBottom: 12 },
+  confirmBtns: { flexDirection: "row", gap: 8, justifyContent: "flex-end" },
+  confirmCancel: { paddingHorizontal: 16, paddingVertical: 8 },
+  confirmCancelText: { color: "#888", fontSize: 14 },
+  confirmSair: { backgroundColor: "#E53935", borderRadius: 8, paddingHorizontal: 16, paddingVertical: 8 },
+  confirmSairText: { color: "#fff", fontSize: 14, fontWeight: "700" },
 });
