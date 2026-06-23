@@ -38,10 +38,13 @@ export default function ResetPasswordScreen() {
 
     const { error: authError } = await getSupabase().auth.updateUser({ password });
 
-    setLoading(false);
     if (authError) {
+      setLoading(false);
       setError("Não foi possível atualizar a senha. O link pode ter expirado.");
     } else {
+      // Sign out immediately so _layout.tsx doesn't redirect to tabs on USER_UPDATED
+      await getSupabase().auth.signOut();
+      setLoading(false);
       setDone(true);
     }
   }
