@@ -1,12 +1,10 @@
-import { ExpoRequest, ExpoResponse } from "expo-router/server";
-
 const GOOGLE_KEY = process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY ?? "";
 
-export async function POST(request: ExpoRequest): Promise<ExpoResponse> {
+export async function POST(request: Request): Promise<Response> {
   const { origin, destination } = await request.json();
 
   if (!origin || !destination) {
-    return ExpoResponse.json({ error: "origin and destination required" }, { status: 400 });
+    return Response.json({ error: "origin and destination required" }, { status: 400 });
   }
 
   const url =
@@ -21,14 +19,14 @@ export async function POST(request: ExpoRequest): Promise<ExpoResponse> {
   const json = await res.json();
 
   if (json.status !== "OK") {
-    return ExpoResponse.json(
+    return Response.json(
       { error: `Directions API: ${json.status}`, detail: json.error_message ?? "" },
       { status: 422 }
     );
   }
 
   const leg = json.routes[0].legs[0];
-  return ExpoResponse.json({
+  return Response.json({
     distanceKm: leg.distance.value / 1000,
     durationMinutes: Math.round(leg.duration.value / 60),
     routeSummary: json.routes[0].summary ?? "",

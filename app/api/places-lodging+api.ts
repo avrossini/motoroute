@@ -1,5 +1,3 @@
-import { ExpoRequest, ExpoResponse } from "expo-router/server";
-
 const GOOGLE_KEY = process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY ?? "";
 
 // Forward geocode a city/address to coordinates
@@ -13,7 +11,7 @@ async function geocodeAddress(address: string): Promise<{ lat: number; lng: numb
   return { lat: loc.lat, lng: loc.lng, label };
 }
 
-export async function POST(request: ExpoRequest): Promise<ExpoResponse> {
+export async function POST(request: Request): Promise<Response> {
   const { city, lat, lng } = await request.json();
 
   let refLat: number = lat;
@@ -24,7 +22,7 @@ export async function POST(request: ExpoRequest): Promise<ExpoResponse> {
   if ((refLat == null || refLng == null) && city) {
     const geo = await geocodeAddress(city);
     if (!geo) {
-      return ExpoResponse.json({ error: "Não foi possível geocodificar a cidade" }, { status: 422 });
+      return Response.json({ error: "Não foi possível geocodificar a cidade" }, { status: 422 });
     }
     refLat = geo.lat;
     refLng = geo.lng;
@@ -36,7 +34,7 @@ export async function POST(request: ExpoRequest): Promise<ExpoResponse> {
   const json = await res.json();
 
   if (json.status !== "OK" && json.status !== "ZERO_RESULTS") {
-    return ExpoResponse.json({ error: json.status }, { status: 422 });
+    return Response.json({ error: json.status }, { status: 422 });
   }
 
   const results = (json.results ?? [])
@@ -62,5 +60,5 @@ export async function POST(request: ExpoRequest): Promise<ExpoResponse> {
     })
     .sort((a: any, b: any) => a.distance_m - b.distance_m);
 
-  return ExpoResponse.json({ results, ref_lat: refLat, ref_lng: refLng, ref_label: refLabel });
+  return Response.json({ results, ref_lat: refLat, ref_lng: refLng, ref_label: refLabel });
 }

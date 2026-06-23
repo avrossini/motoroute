@@ -1,5 +1,3 @@
-import { ExpoRequest, ExpoResponse } from "expo-router/server";
-
 const GOOGLE_KEY = process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY ?? "";
 
 interface LatLng { lat: number; lng: number }
@@ -88,11 +86,11 @@ async function reverseGeocode(lat: number, lng: number): Promise<string> {
   return `${lat.toFixed(4)},${lng.toFixed(4)}`;
 }
 
-export async function POST(request: ExpoRequest): Promise<ExpoResponse> {
+export async function POST(request: Request): Promise<Response> {
   const { origin, destination, minStopKm, maxStopKm, numDays, manualWaypoints } = await request.json();
 
   if (!origin || !destination) {
-    return ExpoResponse.json({ error: "origin and destination required" }, { status: 400 });
+    return Response.json({ error: "origin and destination required" }, { status: 400 });
   }
 
   // When manual waypoints are provided, build route through them directly
@@ -100,7 +98,7 @@ export async function POST(request: ExpoRequest): Promise<ExpoResponse> {
     const wps: LatLng[] = manualWaypoints.map((w: any) => ({ lat: w.lat, lng: w.lng }));
     const wpRoute = await getRoute(origin, destination, wps);
     if (wpRoute.status !== "OK") {
-      return ExpoResponse.json({ error: `Directions API: ${wpRoute.status}` }, { status: 422 });
+      return Response.json({ error: `Directions API: ${wpRoute.status}` }, { status: 422 });
     }
     const route = wpRoute.routes[0];
     const legs = route.legs;
@@ -137,7 +135,7 @@ export async function POST(request: ExpoRequest): Promise<ExpoResponse> {
       };
     });
 
-    return ExpoResponse.json({
+    return Response.json({
       segments,
       total_km: Math.round(totalKm),
       total_duration_min: segments.reduce((sum, s) => sum + s.duration_minutes, 0),
@@ -149,7 +147,7 @@ export async function POST(request: ExpoRequest): Promise<ExpoResponse> {
   // Step 1: get full route to find total distance and steps
   const fullRoute = await getRoute(origin, destination);
   if (fullRoute.status !== "OK") {
-    return ExpoResponse.json({ error: `Directions API: ${fullRoute.status}` }, { status: 422 });
+    return Response.json({ error: `Directions API: ${fullRoute.status}` }, { status: 422 });
   }
 
   const leg0 = fullRoute.routes[0].legs[0];
@@ -158,7 +156,7 @@ export async function POST(request: ExpoRequest): Promise<ExpoResponse> {
   // If route fits in one segment, return it directly
   if (totalKm <= maxStopKm) {
     const alerts = totalKm < minStopKm ? ["trecho_curto"] : [];
-    return ExpoResponse.json({
+    return Response.json({
       segments: [{
         order_index: 0,
         day_index: 1,
@@ -190,7 +188,7 @@ export async function POST(request: ExpoRequest): Promise<ExpoResponse> {
     : fullRoute;
 
   if (waypointRoute.status !== "OK") {
-    return ExpoResponse.json({ error: `Directions API (waypoints): ${waypointRoute.status}` }, { status: 422 });
+    return Response.json({ error: `Directions API (waypoints): ${waypointRoute.status}` }, { status: 422 });
   }
 
   const route = waypointRoute.routes[0];
@@ -238,7 +236,7 @@ export async function POST(request: ExpoRequest): Promise<ExpoResponse> {
     };
   });
 
-  return ExpoResponse.json({
+  return Response.json({
     segments,
     total_km: Math.round(totalKm),
     total_duration_min: segments.reduce((sum, s) => sum + s.duration_minutes, 0),

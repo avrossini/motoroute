@@ -1,11 +1,9 @@
-import { ExpoRequest, ExpoResponse } from "expo-router/server";
-
 const GOOGLE_KEY = process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY ?? "";
 
-export async function POST(request: ExpoRequest): Promise<ExpoResponse> {
+export async function POST(request: Request): Promise<Response> {
   const { lat, lng } = await request.json();
   if (lat == null || lng == null) {
-    return ExpoResponse.json({ error: "lat, lng required" }, { status: 400 });
+    return Response.json({ error: "lat, lng required" }, { status: 400 });
   }
 
   const url = `https://maps.googleapis.com/maps/api/place/nearbysearch/json?location=${lat},${lng}&radius=5000&type=gas_station&language=pt-BR&key=${GOOGLE_KEY}`;
@@ -13,7 +11,7 @@ export async function POST(request: ExpoRequest): Promise<ExpoResponse> {
   const json = await res.json();
 
   if (json.status !== "OK" && json.status !== "ZERO_RESULTS") {
-    return ExpoResponse.json({ error: json.status }, { status: 422 });
+    return Response.json({ error: json.status }, { status: 422 });
   }
 
   const results = (json.results ?? [])
@@ -29,5 +27,5 @@ export async function POST(request: ExpoRequest): Promise<ExpoResponse> {
       longitude: r.geometry.location.lng,
     }));
 
-  return ExpoResponse.json({ results });
+  return Response.json({ results });
 }
