@@ -42,16 +42,9 @@ export default function RootLayout() {
 
     supabase.auth.getSession().then(({ data }) => {
       setSession(data.session);
-
-      if (isRecoveryUrl()) {
-        setIsRecovery(true);
-        setReady(true);
-        SplashScreen.hideAsync();
-        router.replace("/(auth)/reset-password");
-      } else {
-        setReady(true);
-        SplashScreen.hideAsync();
-      }
+      if (isRecoveryUrl()) setIsRecovery(true);
+      setReady(true);
+      SplashScreen.hideAsync();
     });
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, s) => {
@@ -68,6 +61,13 @@ export default function RootLayout() {
   }, []);
 
   useAuthRedirect(session, ready, isRecovery);
+
+  // Navigate to reset-password AFTER the Stack has mounted (useEffect runs post-render)
+  useEffect(() => {
+    if (ready && isRecovery) {
+      router.replace("/(auth)/reset-password");
+    }
+  }, [ready, isRecovery]);
 
   if (!ready) return null;
 
