@@ -624,15 +624,26 @@ export default function TripDetailScreen() {
     setRemoveWpConfirm(null);
     const { data: remaining } = await supabase
       .from("waypoints")
-      .select("name, latitude, longitude, order_index")
+      .select("id, name, latitude, longitude, order_index")
       .eq("trip_id", id)
       .order("order_index", { ascending: true });
-    const remainingWps: ManualWaypoint[] = (remaining ?? []).map((w) => ({
+    const remainingRows = remaining ?? [];
+    // Update state immediately so chips reflect the deletion before recalc spinner
+    setWaypoints(remainingRows.map((w) => ({
+      id: w.id,
+      name: w.name,
+      latitude: Number(w.latitude),
+      longitude: Number(w.longitude),
+      order_index: w.order_index,
+    })));
+    const remainingWps: ManualWaypoint[] = remainingRows.map((w) => ({
       name: w.name,
       lat: Number(w.latitude),
       lng: Number(w.longitude),
     }));
     await calcularRota(remainingWps);
+    // Final explicit reload to ensure all state (incl. waypoints) is fresh after recalc
+    await load();
   }
 
   async function calcularRota(overrideWaypoints?: ManualWaypoint[]) {
