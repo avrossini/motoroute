@@ -310,6 +310,7 @@ export default function TripDetailScreen() {
   const [wpSaving, setWpSaving] = useState(false);
   const [favoriteIds, setFavoriteIds] = useState<Set<string>>(new Set());
   const [favSaving, setFavSaving] = useState<string | null>(null);
+  const [removeWpConfirm, setRemoveWpConfirm] = useState<string | null>(null);
 
   async function load() {
     const supabase = getSupabase();
@@ -620,14 +621,25 @@ export default function TripDetailScreen() {
   async function deleteWaypoint(wpId: string) {
     const supabase = getSupabase();
     await supabase.from("waypoints").delete().eq("id", wpId);
-    await load();
+    setRemoveWpConfirm(null);
+    const { data: remaining } = await supabase
+      .from("waypoints")
+      .select("name, latitude, longitude, order_index")
+      .eq("trip_id", id)
+      .order("order_index", { ascending: true });
+    const remainingWps: ManualWaypoint[] = (remaining ?? []).map((w) => ({
+      name: w.name,
+      lat: Number(w.latitude),
+      lng: Number(w.longitude),
+    }));
+    await calcularRota(remainingWps);
   }
 
-  async function calcularRota() {
+  async function calcularRota(overrideWaypoints?: ManualWaypoint[]) {
     if (!trip) return;
     setCalculating(true);
     try {
-      const manualWps: ManualWaypoint[] = waypoints.map((w) => ({
+      const manualWps: ManualWaypoint[] = overrideWaypoints ?? waypoints.map((w) => ({
         name: w.name,
         lat: w.latitude,
         lng: w.longitude,
@@ -805,17 +817,34 @@ export default function TripDetailScreen() {
                 {!isLastSeg && (
                   <View style={styles.wpDivider}>
                     {wpsAfter.map((wp) => (
-                      <View key={wp.id} style={styles.wpTag}>
-                        <Text style={styles.wpTagText}>📍 {wp.name}</Text>
-                        <TouchableOpacity
-                          onPress={() => Alert.alert("Remover parada", `Remover "${wp.name}" do roteiro?`, [
-                            { text: "Cancelar", style: "cancel" },
-                            { text: "Remover", style: "destructive", onPress: () => deleteWaypoint(wp.id) },
-                          ])}
-                          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                        >
-                          <Text style={styles.wpTagRemove}>×</Text>
-                        </TouchableOpacity>
+                      <View key={wp.id}>
+                        {removeWpConfirm === wp.id ? (
+                          <View style={styles.wpRemoveConfirm}>
+                            <Text style={styles.wpRemoveConfirmText}>Remover "{wp.name}"?</Text>
+                            <TouchableOpacity
+                              onPress={() => setRemoveWpConfirm(null)}
+                              style={styles.wpRemoveCancel}
+                            >
+                              <Text style={styles.wpRemoveCancelText}>Não</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                              onPress={() => deleteWaypoint(wp.id)}
+                              style={styles.wpRemoveConfirmBtn}
+                            >
+                              <Text style={styles.wpRemoveConfirmBtnText}>Remover</Text>
+                            </TouchableOpacity>
+                          </View>
+                        ) : (
+                          <View style={styles.wpTag}>
+                            <Text style={styles.wpTagText}>📍 {wp.name}</Text>
+                            <TouchableOpacity
+                              onPress={() => setRemoveWpConfirm(wp.id)}
+                              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                            >
+                              <Text style={styles.wpTagRemove}>×</Text>
+                            </TouchableOpacity>
+                          </View>
+                        )}
                       </View>
                     ))}
                     <TouchableOpacity
@@ -1399,6 +1428,36 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   wpSearchBtnText: { color: "#fff", fontWeight: "700", fontSize: 14 },
+
+  wpRemoveConfirm: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#FEE2E2",
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderWidth: 1,
+    borderColor: "#FCA5A5",
+    gap: 8,
+    alignSelf: "flex-start",
+  },
+  wpRemoveConfirmText: { fontSize: 13, color: "#991B1B", fontWeight: "600", flex: 1 },
+  wpRemoveCancel: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 6,
+    backgroundColor: "#fff",
+    borderWidth: 1,
+    borderColor: "#D0D0D0",
+  },
+  wpRemoveCancelText: { fontSize: 12, color: "#555", fontWeight: "600" },
+  wpRemoveConfirmBtn: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 6,
+    backgroundColor: "#EF4444",
+  },
+  wpRemoveConfirmBtnText: { fontSize: 12, color: "#fff", fontWeight: "700" },
 
   btnSave: {
     backgroundColor: "#fff",
