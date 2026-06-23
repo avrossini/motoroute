@@ -10,50 +10,34 @@ import {
   Platform,
 } from "react-native";
 import { router } from "expo-router";
+import * as Linking from "expo-linking";
 import { getSupabase } from "@/services/supabase";
 
-export default function LoginScreen() {
+export default function ForgotPasswordScreen() {
   const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
+  const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  async function handleLogin() {
-    if (!email || !password) {
-      setError("Preencha e-mail e senha.");
+  async function handleReset() {
+    if (!email) {
+      setError("Informe seu e-mail.");
       return;
     }
     setLoading(true);
     setError(null);
+    setMessage(null);
 
-    const { error: authError } = await getSupabase().auth.signInWithPassword({
-      email,
-      password,
+    const redirectTo = Linking.createURL("reset-password");
+    const { error: authError } = await getSupabase().auth.resetPasswordForEmail(email, {
+      redirectTo,
     });
 
     setLoading(false);
     if (authError) {
-      setError("E-mail ou senha incorretos.");
+      setError("Não foi possível enviar o e-mail. Verifique o endereço.");
     } else {
-      router.replace("/(tabs)/");
-    }
-  }
-
-  async function handleSignUp() {
-    if (!email || !password) {
-      setError("Preencha e-mail e senha.");
-      return;
-    }
-    setLoading(true);
-    setError(null);
-
-    const { error: authError } = await getSupabase().auth.signUp({ email, password });
-
-    setLoading(false);
-    if (authError) {
-      setError(authError.message);
-    } else {
-      setError("Conta criada! Verifique seu e-mail para confirmar.");
+      setMessage("E-mail enviado! Verifique sua caixa de entrada e siga o link para redefinir a senha.");
     }
   }
 
@@ -64,48 +48,45 @@ export default function LoginScreen() {
     >
       <View style={styles.header}>
         <Text style={styles.logo}>MotoRoute</Text>
-        <Text style={styles.subtitle}>Planejamento de viagens de moto</Text>
+        <Text style={styles.subtitle}>Recuperar senha</Text>
       </View>
 
       <View style={styles.form}>
         {error && <Text style={styles.errorText}>{error}</Text>}
+        {message && <Text style={styles.successText}>{message}</Text>}
 
-        <TextInput
-          style={styles.input}
-          placeholder="E-mail"
-          placeholderTextColor="#999"
-          autoCapitalize="none"
-          keyboardType="email-address"
-          value={email}
-          onChangeText={setEmail}
-        />
-        <TextInput
-          style={styles.input}
-          placeholder="Senha"
-          placeholderTextColor="#999"
-          secureTextEntry
-          value={password}
-          onChangeText={setPassword}
-        />
+        {!message && (
+          <>
+            <Text style={styles.description}>
+              Informe o e-mail cadastrado e enviaremos um link para redefinir sua senha.
+            </Text>
 
-        <TouchableOpacity
-          style={styles.btnPrimary}
-          onPress={handleLogin}
-          disabled={loading}
-        >
-          {loading ? (
-            <ActivityIndicator color="#fff" />
-          ) : (
-            <Text style={styles.btnPrimaryText}>Entrar</Text>
-          )}
-        </TouchableOpacity>
+            <TextInput
+              style={styles.input}
+              placeholder="E-mail"
+              placeholderTextColor="#999"
+              autoCapitalize="none"
+              keyboardType="email-address"
+              value={email}
+              onChangeText={setEmail}
+            />
 
-        <TouchableOpacity onPress={() => router.push("/(auth)/forgot-password")} disabled={loading}>
-          <Text style={styles.linkText}>Esqueceu a senha?</Text>
-        </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.btnPrimary}
+              onPress={handleReset}
+              disabled={loading}
+            >
+              {loading ? (
+                <ActivityIndicator color="#fff" />
+              ) : (
+                <Text style={styles.btnPrimaryText}>Enviar link</Text>
+              )}
+            </TouchableOpacity>
+          </>
+        )}
 
-        <TouchableOpacity onPress={handleSignUp} disabled={loading}>
-          <Text style={styles.linkText}>Não tem conta? Cadastre-se</Text>
+        <TouchableOpacity onPress={() => router.back()}>
+          <Text style={styles.linkText}>Voltar ao login</Text>
         </TouchableOpacity>
       </View>
     </KeyboardAvoidingView>
@@ -136,6 +117,12 @@ const styles = StyleSheet.create({
   },
   form: {
     gap: 12,
+  },
+  description: {
+    color: "#999",
+    fontSize: 14,
+    textAlign: "center",
+    lineHeight: 20,
   },
   input: {
     backgroundColor: "#2A2A2A",
@@ -171,5 +158,14 @@ const styles = StyleSheet.create({
     backgroundColor: "#2A1A1A",
     padding: 10,
     borderRadius: 8,
+  },
+  successText: {
+    color: "#4CAF50",
+    fontSize: 13,
+    textAlign: "center",
+    backgroundColor: "#1A2A1A",
+    padding: 10,
+    borderRadius: 8,
+    lineHeight: 20,
   },
 });

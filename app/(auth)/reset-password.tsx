@@ -12,49 +12,57 @@ import {
 import { router } from "expo-router";
 import { getSupabase } from "@/services/supabase";
 
-export default function LoginScreen() {
-  const [email, setEmail] = useState("");
+export default function ResetPasswordScreen() {
   const [password, setPassword] = useState("");
+  const [confirm, setConfirm] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [done, setDone] = useState(false);
 
-  async function handleLogin() {
-    if (!email || !password) {
-      setError("Preencha e-mail e senha.");
+  async function handleUpdate() {
+    if (!password || !confirm) {
+      setError("Preencha os dois campos.");
       return;
     }
+    if (password.length < 8) {
+      setError("A senha deve ter pelo menos 8 caracteres.");
+      return;
+    }
+    if (password !== confirm) {
+      setError("As senhas não coincidem.");
+      return;
+    }
+
     setLoading(true);
     setError(null);
 
-    const { error: authError } = await getSupabase().auth.signInWithPassword({
-      email,
-      password,
-    });
+    const { error: authError } = await getSupabase().auth.updateUser({ password });
 
     setLoading(false);
     if (authError) {
-      setError("E-mail ou senha incorretos.");
+      setError("Não foi possível atualizar a senha. O link pode ter expirado.");
     } else {
-      router.replace("/(tabs)/");
+      setDone(true);
     }
   }
 
-  async function handleSignUp() {
-    if (!email || !password) {
-      setError("Preencha e-mail e senha.");
-      return;
-    }
-    setLoading(true);
-    setError(null);
-
-    const { error: authError } = await getSupabase().auth.signUp({ email, password });
-
-    setLoading(false);
-    if (authError) {
-      setError(authError.message);
-    } else {
-      setError("Conta criada! Verifique seu e-mail para confirmar.");
-    }
+  if (done) {
+    return (
+      <View style={styles.container}>
+        <View style={styles.header}>
+          <Text style={styles.logo}>MotoRoute</Text>
+        </View>
+        <View style={styles.form}>
+          <Text style={styles.successText}>Senha atualizada com sucesso!</Text>
+          <TouchableOpacity
+            style={styles.btnPrimary}
+            onPress={() => router.replace("/(auth)/login")}
+          >
+            <Text style={styles.btnPrimaryText}>Ir para o login</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    );
   }
 
   return (
@@ -64,7 +72,7 @@ export default function LoginScreen() {
     >
       <View style={styles.header}>
         <Text style={styles.logo}>MotoRoute</Text>
-        <Text style={styles.subtitle}>Planejamento de viagens de moto</Text>
+        <Text style={styles.subtitle}>Nova senha</Text>
       </View>
 
       <View style={styles.form}>
@@ -72,40 +80,31 @@ export default function LoginScreen() {
 
         <TextInput
           style={styles.input}
-          placeholder="E-mail"
-          placeholderTextColor="#999"
-          autoCapitalize="none"
-          keyboardType="email-address"
-          value={email}
-          onChangeText={setEmail}
-        />
-        <TextInput
-          style={styles.input}
-          placeholder="Senha"
+          placeholder="Nova senha"
           placeholderTextColor="#999"
           secureTextEntry
           value={password}
           onChangeText={setPassword}
         />
+        <TextInput
+          style={styles.input}
+          placeholder="Confirmar nova senha"
+          placeholderTextColor="#999"
+          secureTextEntry
+          value={confirm}
+          onChangeText={setConfirm}
+        />
 
         <TouchableOpacity
           style={styles.btnPrimary}
-          onPress={handleLogin}
+          onPress={handleUpdate}
           disabled={loading}
         >
           {loading ? (
             <ActivityIndicator color="#fff" />
           ) : (
-            <Text style={styles.btnPrimaryText}>Entrar</Text>
+            <Text style={styles.btnPrimaryText}>Salvar nova senha</Text>
           )}
-        </TouchableOpacity>
-
-        <TouchableOpacity onPress={() => router.push("/(auth)/forgot-password")} disabled={loading}>
-          <Text style={styles.linkText}>Esqueceu a senha?</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity onPress={handleSignUp} disabled={loading}>
-          <Text style={styles.linkText}>Não tem conta? Cadastre-se</Text>
         </TouchableOpacity>
       </View>
     </KeyboardAvoidingView>
@@ -158,18 +157,20 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: "700",
   },
-  linkText: {
-    color: "#C97826",
-    textAlign: "center",
-    fontSize: 14,
-    marginTop: 8,
-  },
   errorText: {
     color: "#E53935",
     fontSize: 13,
     textAlign: "center",
     backgroundColor: "#2A1A1A",
     padding: 10,
+    borderRadius: 8,
+  },
+  successText: {
+    color: "#4CAF50",
+    fontSize: 14,
+    textAlign: "center",
+    backgroundColor: "#1A2A1A",
+    padding: 12,
     borderRadius: 8,
   },
 });

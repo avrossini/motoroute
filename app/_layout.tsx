@@ -7,7 +7,7 @@ import { getSupabase } from "@/services/supabase";
 
 SplashScreen.preventAutoHideAsync();
 
-function useAuthRedirect(session: Session | null, ready: boolean) {
+function useAuthRedirect(session: Session | null, ready: boolean, isRecovery: boolean) {
   const segments = useSegments();
 
   useEffect(() => {
@@ -17,15 +17,16 @@ function useAuthRedirect(session: Session | null, ready: boolean) {
 
     if (!session && !inAuth) {
       router.replace("/(auth)/login");
-    } else if (session && inAuth) {
+    } else if (session && inAuth && !isRecovery) {
       router.replace("/(tabs)/");
     }
-  }, [session, ready, segments]);
+  }, [session, ready, segments, isRecovery]);
 }
 
 export default function RootLayout() {
   const [session, setSession] = useState<Session | null>(null);
   const [ready, setReady] = useState(false);
+  const [isRecovery, setIsRecovery] = useState(false);
 
   useEffect(() => {
     const supabase = getSupabase();
@@ -36,14 +37,20 @@ export default function RootLayout() {
       SplashScreen.hideAsync();
     });
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, s) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, s) => {
       setSession(s);
+      if (event === "PASSWORD_RECOVERY") {
+        setIsRecovery(true);
+        router.replace("/(auth)/reset-password");
+      } else if (event === "USER_UPDATED") {
+        setIsRecovery(false);
+      }
     });
 
     return () => subscription.unsubscribe();
   }, []);
 
-  useAuthRedirect(session, ready);
+  useAuthRedirect(session, ready, isRecovery);
 
   if (!ready) return null;
 
