@@ -277,4 +277,32 @@ body { display: flex; flex-direction: column; background: #fff; }
 .login-divider { display: flex; align-items: center; gap: 12px; margin: 20px 0; }
 .login-divider-line { flex: 1; height: 1px; background: #333; }
 .login-divider-text { color: #555; font-size: 12px; }
-.login-google-btn { width: 100%; background: #fff; color: #333; border: none; border-radius: 14px; padding: 14px 16px; font-size: 15px; font-weight:
+.login-google-btn { width: 100%; background: #fff; color: #333; border: none; border-radius: 14px; padding: 14px 16px; font-size: 15px; font-weight: 600; cursor: pointer; }
+/* SEGMENT CARD — novo layout (clima à direita, alertas no rodapé) */
+.segment-row { padding: 0; }
+.segment-body { display: flex; align-items: stretch; }
+.segment-content { flex: 1; min-width: 0; padding: 11px 14px; }
+.segment-weather { width: 76px; flex-shrink: 0; background: #F9F9F9; border-left: 1px solid #f0f0f0; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 10px 6px; gap: 2px; }
+.weather-temp { font-size: 18px; font-weight: 700; color: var(--dark); line-height: 1.1; margin-top: 4px; }
+.weather-sub { font-size: 9px; color: #999; line-height: 1.5; text-align: center; }
+.weather-locked { font-size: 10px; color: #aaa; text-align: center; margin-top: 4px; }
+.weather-countdown { font-size: 11px; font-weight: 700; color: #888; background: #e8e8e8; padding: 2px 7px; border-radius: 20px; margin-top: 3px; }
+.segment-alerts { border-top: 1px solid #f0f0f0; padding: 6px 11px; display: flex; flex-wrap: wrap; gap: 5px; }
+.alert-chip { display: flex; align-items: center; gap: 3px; font-size: 10px; font-weight: 600; padding: 3px 8px; border-radius: 20px; }
+.alert-chip.rain { background: #EBF4FF; color: #1565C0; }
+.alert-chip.wind { background: #FFF3E0; color: #E65100; }
+.alert-chip.fuel { background: #FFF8E1; color: #F57F17; }
+.alert-chip.cold { background: #E3F2FD; color: #0277BD; }
+.alert-chip.danger-chip { background: #FEE2E2; color: #E53935; }
+
+/* WAYPOINT DIVIDER */
+.wp-divider { margin: 2px 14px; display: flex; flex-direction: column; align-items: center; gap: 5px; padding: 6px 0; }
+.wp-tag-chip { display: flex; align-items: center; gap: 6px; background: #EFF6FF; border-radius: 8px; padding: 5px 10px; border: 1px solid #BFDBFE; align-self: flex-start; }
+.wp-tag-chip-text { font-size: 13px; color: #1E40AF; font-weight: 600; }
+.wp-tag-remove { font-size: 15px; color: #93C5FD; font-weight: 700; cursor: pointer; }
+.wp-add-btn { align-self: center; padding: 5px 14px; border-radius: 20px; border: 1px dashed #D0D0D0; background: #fff; font-size: 12px; color: #888; cursor: pointer; }
+.btn-recalc { background: var(--orange); color: #fff; border: none; border-radius: 14px; padding: 14px 16px; font-size: 14px; font-weight: 700; width: calc(100% - 40px); margin: 8px 20px 0; cursor: pointer; text-align: center; display: block; flex-shrink: 0; }
+.btn-weather-outline { background: #fff; color: var(--orange); border: 1.5px solid var(--orange); border-radius: 14px; padding: 12px 16px; font-size: 14px; font-weight: 700; width: calc(100% - 40px); margin: 8px 20px 0; cursor: pointer; text-align: center; display: block; flex-shrink: 0; }
+.rules-card { background: #FEF3E2; border-radius: 12px; margin: 12px 20px 4px; padding: 12px 14px; flex-shrink: 0; }
+.rules-title { font-size: 10px; font-weight: 700; color: var(--orange); letter-spacing: .8px; margin-bottom: 4px; }
+.rules-line { font-size: 13px; color: #7C4A00; }

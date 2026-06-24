@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="pt-BR"><head><meta charset="UTF-8"><meta name="viewport" content="width=375"><link rel="stylesheet" href="../css/mobile.css"></head>
+<html lang="pt-BR"><head><meta charset="UTF-8"><meta name="viewport" content="width=375"><link rel="stylesheet" href="../css/mobile.css"><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/weather-icons/2.0.10/css/weather-icons.min.css"></head>
 <body>
   <div class="status-bar light">
     <div class="notch"></div>
@@ -39,17 +39,35 @@
       </div>
       <div class="day-body">
         <div class="segment-row">
-          <div class="segment-top"><span class="segment-route">SP → Jacareí</span><span class="segment-time">07:00</span></div>
-          <div class="badges"><span class="badge km">110km</span><span class="badge time">1h20</span></div>
-          <div class="climate-card available"><span class="climate-icon">⛅</span><div class="climate-info"><div class="climate-main">26°C · Parcialmente nublado</div><div class="climate-sub">Atualizado há 2h</div></div><button class="refresh-btn">↻ att.</button></div>
-          <div class="stop-row"><span class="stop-icon">☕</span><div class="stop-info"><div class="stop-name-text">Padaria Mantiqueira</div><div class="stop-rating">★★★★☆ · Sua avaliação</div></div><button class="stop-alt-btn" onclick="window.parent.goto('alternativas')">Ver alt.</button><button class="stop-alt-btn" onclick="window.parent.goto('avaliar-parada')" style="background:#FFF8EE;color:#C97826">★ Avaliar</button></div>
-          <div class="add-between"><div class="add-between-line"></div><button class="add-between-btn">＋</button><div class="add-between-line"></div></div>
-          <div class="stop-row"><span class="stop-icon">⛽</span><div class="stop-info"><div class="stop-name-text">Posto Shell Jacareí</div><div class="stop-rating">★★★★★ · Na rota</div></div><button class="stop-alt-btn" onclick="window.parent.goto('alternativas')">Ver alt.</button></div>
+          <div class="segment-body">
+            <div class="segment-content">
+              <div class="segment-top"><span class="segment-route">SP → Jacareí</span><span class="segment-time">07:00</span></div>
+              <div class="badges"><span class="badge km">110km</span><span class="badge time">1h20</span></div>
+              <div class="stop-row"><span class="stop-icon">⛽</span><div class="stop-info"><div class="stop-name-text">Posto Shell Jacareí</div><div class="stop-rating">★★★★★ · Na rota</div></div><button class="stop-alt-btn" onclick="window.parent.goto('alternativas')">Ver alt.</button></div>
+            </div>
+            <div class="segment-weather">
+              <i class="wi wi-day-cloudy" style="color:#6B9DC9;font-size:28px"></i>
+              <div class="weather-temp">26°</div>
+              <div class="weather-sub">🌧 15%<br>💨 12km/h</div>
+            </div>
+          </div>
+        </div>
+        <div class="wp-divider">
+          <div class="wp-tag-chip"><span class="wp-tag-chip-text">📍 São José dos Campos</span><span class="wp-tag-remove">×</span></div>
+          <button class="wp-add-btn">+ Inserir parada aqui</button>
         </div>
         <div class="segment-row">
-          <div class="segment-top"><span class="segment-route">Jacareí → Pinda</span><span class="segment-time">09:30</span></div>
-          <div class="badges"><span class="badge km">173km</span><span class="badge time">2h10</span><span class="badge mountain">⛰ Serrana</span></div>
-          <div class="climate-card available"><span class="climate-icon">☀️</span><div class="climate-info"><div class="climate-main">28°C · Ensolarado</div><div class="climate-sub">Atualizado há 2h</div></div><button class="refresh-btn">↻ att.</button></div>
+          <div class="segment-body">
+            <div class="segment-content">
+              <div class="segment-top"><span class="segment-route">Jacareí → Pinda</span><span class="segment-time">09:30</span></div>
+              <div class="badges"><span class="badge km">173km</span><span class="badge time">2h10</span><span class="badge mountain">⛰ Serrana</span></div>
+            </div>
+            <div class="segment-weather">
+              <i class="wi wi-day-sunny" style="color:#F59E0B;font-size:28px"></i>
+              <div class="weather-temp">28°</div>
+              <div class="weather-sub">🌧 5%<br>💨 8km/h</div>
+            </div>
+          </div>
         </div>
         <div style="border-top:2px dashed #f0f0f0">
           <!-- Estado: Selecionada, não reservada -->
@@ -79,9 +97,21 @@
       </div>
       <div class="day-body">
         <div class="segment-row">
-          <div class="segment-top"><span class="segment-route">Pinda → Cunha</span><span class="segment-time">08:30</span></div>
-          <div class="badges"><span class="badge km">198km</span><span class="badge time">2h45</span><span class="badge danger">⚠️ Chuva</span></div>
-          <div class="climate-card warn"><span class="climate-icon">🌧️</span><div class="climate-info"><div class="climate-main">19°C · Chuva moderada</div><div class="climate-sub">Atualizado há 7h — pode estar desatualizado</div></div><button class="refresh-stale">↻ att.</button></div>
+          <div class="segment-body">
+            <div class="segment-content">
+              <div class="segment-top"><span class="segment-route">Pinda → Cunha</span><span class="segment-time">08:30</span></div>
+              <div class="badges"><span class="badge km">198km</span><span class="badge time">2h45</span></div>
+            </div>
+            <div class="segment-weather">
+              <i class="wi wi-rain" style="color:#3B82F6;font-size:28px"></i>
+              <div class="weather-temp">19°</div>
+              <div class="weather-sub">🌧 60%<br>💨 28km/h</div>
+            </div>
+          </div>
+          <div class="segment-alerts">
+            <span class="alert-chip rain">⚠ Chuva forte</span>
+            <span class="alert-chip wind">💨 Vento moderado</span>
+          </div>
         </div>
         <div style="border-top:2px dashed #f0f0f0">
           <!-- Estado: Reservada -->
@@ -114,13 +144,30 @@
       </div>
       <div class="day-body">
         <div class="segment-row">
-          <div class="segment-top"><span class="segment-route">Cunha → CJ</span><span class="segment-time">09:00</span></div>
-          <div class="badges"><span class="badge km">366km</span><span class="badge time">4h30</span></div>
-          <div class="climate-card locked"><span class="climate-icon">🔒</span><div class="climate-info"><div class="climate-locked-text">Previsão disponível em</div></div><span class="climate-countdown">8d</span></div>
+          <div class="segment-body">
+            <div class="segment-content">
+              <div class="segment-top"><span class="segment-route">Cunha → CJ</span><span class="segment-time">09:00</span></div>
+              <div class="badges"><span class="badge km">366km</span><span class="badge time">4h30</span></div>
+            </div>
+            <div class="segment-weather">
+              <span style="font-size:20px">🔒</span>
+              <div class="weather-locked">Prev. em</div>
+              <div class="weather-countdown">8d</div>
+            </div>
+          </div>
         </div>
       </div>
     </div>
-    <button class="btn-primary" onclick="window.parent.goto('ativa')">🏍️ Iniciar Viagem</button>
+    <button class="btn-recalc">↻ Recalcular Rota</button>
+    <button class="btn-weather-outline">☁ Atualizar Clima</button>
+    <div style="display:flex;gap:8px;margin:8px 20px 0;flex-shrink:0">
+      <button style="flex:1;background:#fff;color:#555;border:1.5px solid #D0D0D0;border-radius:14px;padding:14px 10px;font-size:13px;font-weight:700;cursor:pointer">💾 Salvar</button>
+      <button style="flex:2;background:#1A1A1A;color:#C97826;border:1.5px solid #C97826;border-radius:14px;padding:14px 10px;font-size:14px;font-weight:800;cursor:pointer" onclick="window.parent.goto('ativa')">🏍️ Iniciar Viagem</button>
+    </div>
+    <div class="rules-card">
+      <div class="rules-title">REGRAS DA VIAGEM</div>
+      <div class="rules-line">Paradas: 100–200 km entre cada uma</div>
+    </div>
   </div>
   <nav class="bottom-nav">
     <button class="nav-item" onclick="window.parent.goto('home')">

@@ -118,30 +118,96 @@ HOST_IP=192.168.1.100 docker compose up
 
 O celular precisa estar na mesma rede Wi-Fi que o seu PC.
 
-### Hot reload e cache — regras obrigatórias
+### Hot reload e cache — camadas e procedimentos
 
-O projeto roda em **Windows + Docker + WSL**. O WSL não propaga eventos `inotify` para o filesystem do container, então o Metro não detecta mudanças por padrão. A configuração abaixo (já presente no `docker-compose.yml`) resolve isso via polling:
+O projeto roda em **Windows + Docker + WSL**. Essa combinação cria múltiplas camadas de cache independentes. Ignorar qualquer uma delas leva a investigar "bugs" que não existem.
+
+#### Por que o ambiente é complicado
+
+O WSL não propaga eventos `inotify` para o filesystem do container, então o Metro não detecta mudanças via eventos de sistema de arquivos. A configuração abaixo (já presente no `docker-compose.yml`) resolve isso via polling:
 
 ```yaml
 CHOKIDAR_USEPOLLING: "true"
 CHOKIDAR_INTERVAL: "500"
 ```
 
-Com isso em vigor, as regras são:
+Mesmo com polling ativo, existem **cinco camadas de cache independentes** que podem servir código antigo:
 
-| O que mudou | O que fazer | Por quê |
+---
+
+#### Mapa de todas as camadas de cache
+
+| Camada | O que guarda | Vida útil | Sintoma de cache stale |
+|---|---|---|---|
+| **Metro transform cache** | AST/bytecode compilado por arquivo | Persiste entre restarts de container (pasta `.metro-cache/` no bind-mount) | Metro reporta "HMR update" mas o bundle entregue ao browser ainda tem o código antigo |
+| **Metro SSR bundle (in-memory)** | Bundle JS completo servido pelo servidor Expo em `web.output: "server"` | Até o processo Metro ser morto | Alteração visível no `.metro-cache/` mas o browser recebe bundle antigo |
+| **Browser HTTP cache** | Chunks JS/CSS baixados do servidor | Controlado por `Cache-Control` (curto em dev, mas existe) | `Ctrl+Shift+R` não resolve; bundle baixado ainda é o antigo |
+| **React state in-memory** | Estado dos componentes durante HMR | Até navegação completa (full remount) | Componente atualizado via HMR mas comportamento ainda usa state antigo |
+| **PostgREST schema cache** | Schema do Postgres (tabelas, colunas, RLS, funções) | ~10 min ou restart do container `rest` | Nova tabela/coluna/política RLS não aparece na API REST (`/rest/v1/`) |
+
+---
+
+#### Procedimento após cada tipo de mudança
+
+**Regra de ouro antes de reportar qualquer bug: sempre executar o passo "verificar no browser" descrito abaixo.**
+
+| O que mudou | Ação necessária | Por quê |
 |---|---|---|
-| Código frontend (`app/`, `src/`) | **Nada** — Metro detecta via polling e envia HMR ao browser | Chokidar polling ativo |
-| API route (`app/api/*+api.ts`) | **Nada** — Metro recompila na próxima requisição | Mesmo mecanismo de polling |
-| Arquivo `.env` | `docker compose up -d expo` | `restart` não relê o `.env`; só `up` recria o container com os novos valores |
-| `package.json` / dependências | `docker compose build expo && docker compose up -d expo` | Rebuild da imagem necessário |
-| Cache do Metro corrompido | `docker compose exec expo npx expo start --clear` | Limpa o transform cache em `.metro-cache/` |
+| Código frontend (`app/`, `src/`) | Navegar para `/` e voltar para a rota — **sempre** | Metro envia HMR, mas o SSR bundle só é baixado do zero numa nova navegação |
+| API route (`app/api/*+api.ts`) | Nenhuma — Metro recompila na próxima requisição | A API route é executada server-side pelo Metro; polling detecta a mudança |
+| Schema do banco (migration nova) | `docker compose restart rest` | PostgREST mantém o schema em cache; só recarrega com SIGUSR1 (restart) |
+| Arquivo `.env` | `docker compose up -d expo` | `restart` não relê variáveis de ambiente; só `up` recria o container |
+| `package.json` / dependências | `docker compose build expo && docker compose up -d expo` | Dependências ficam na imagem Docker; polling não resolve isso |
+| `kong.yml` (rotas da API gateway) | `docker compose restart kong` | Kong carrega a config declarativa só na inicialização |
 
-**Nunca sugerir `docker compose restart expo` para pegar mudanças de código.** O polling torna isso desnecessário. `restart` só se justifica se o processo Metro travou.
+---
 
-**Cache do Metro**: O transform cache fica em `.metro-cache/` (dentro do volume bind-mount), persistindo entre restarts de container para evitar recompilação completa a cada início. Essa pasta está no `.gitignore`.
+#### Diagnóstico passo a passo quando algo "não funciona"
 
-**Hard reload no browser** (`Ctrl+Shift+R`): não funciona de forma confiável neste projeto. Em `web.output: "server"`, o Expo Router faz o reload in-place e o browser mantém o bundle antigo em memória mesmo com hard reload. O que funciona: **navegar para outra rota (`/`) e voltar** — isso força o browser a baixar o bundle novo do servidor. Nunca usar `location.reload()` no código para forçar atualizações.
+Antes de concluir que há um bug no código, percorrer esta sequência:
+
+**Passo 1 — Forçar novo bundle no browser**
+Navegar para `http://localhost:8081/` e depois voltar à rota que está testando. Isso força o browser a baixar um bundle novo do servidor Metro. `Ctrl+Shift+R` **não funciona** neste projeto — em `web.output: "server"` o Expo Router faz reload in-place e o browser mantém o bundle antigo na memória.
+
+**Passo 2 — Confirmar que o Metro compilou o arquivo**
+Se após o passo 1 o comportamento ainda parece antigo, verificar se o Metro realmente recebeu e compilou a mudança:
+```bash
+# Verificar se o bundle contém o símbolo/texto esperado
+docker compose exec expo wget -qO- http://localhost:8081/_expo/static/js/web/entry.bundle 2>/dev/null | grep -c "nomeDaFuncaoOuTextoEsperado"
+# Retorna 0 → Metro ainda não compilou; retorna > 0 → Metro compilou, o problema é outra camada
+```
+
+**Passo 3 — Limpar o transform cache do Metro**
+Se o Metro não compilou mesmo após aguardar o intervalo de polling (~500ms):
+```bash
+docker compose exec expo npx expo start --clear
+# Isso apaga .metro-cache/ e força recompilação completa
+# Aguardar o Metro reiniciar e reportar "Metro waiting on http://..." antes de testar
+```
+
+**Passo 4 — Reiniciar o processo Metro**
+Se após `--clear` o bundle ainda não contiver a mudança, ou se o Metro travou:
+```bash
+docker compose restart expo
+# Aguardar o container subir e o Metro iniciar antes de testar
+```
+
+**Passo 5 — PostgREST não vê schema novo**
+Se a API REST não reflete tabela, coluna ou política RLS nova:
+```bash
+docker compose restart rest
+# PostgREST recarrega o schema do Postgres na inicialização
+```
+
+---
+
+#### Regras que nunca mudam
+
+- **Nunca usar `docker compose restart expo` como primeiro recurso** para mudanças de código — o polling + navegar para `/` resolve na maioria dos casos sem custo.
+- **Nunca usar `docker compose restart expo` para mudanças de `.env`** — restart preserva as variáveis antigas; só `up` força releitura.
+- **Nunca reportar "comportamento não mudou" sem ter executado o Passo 1** — a navegação para `/` é obrigatória após toda edição testada no browser.
+- **Nunca usar `location.reload()` no código** para forçar atualizações — não funciona em `web.output: "server"`.
+- O transform cache fica em `.metro-cache/` (bind-mounted no host), o que permite reuso entre restarts de container. Está no `.gitignore` e não deve ser commitado.
 
 ## Ordem recomendada de leitura
 

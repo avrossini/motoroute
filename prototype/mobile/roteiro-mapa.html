@@ -1,56 +1,326 @@
 <!DOCTYPE html>
-<html lang="pt-BR"><head><meta charset="UTF-8"><meta name="viewport" content="width=375"><link rel="stylesheet" href="../css/mobile.css"></head>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=375">
+  <link rel="stylesheet" href="../css/mobile.css">
+  <style>
+    .screen-content { display: flex; flex-direction: column; overflow: hidden; }
+    #map { flex: 1; min-height: 0; width: 100%; }
+
+    /* Strip de paradas */
+    .stop-strip {
+      background: #fff;
+      border-top: 1px solid #E8E8E8;
+      padding: 10px 0 10px 12px;
+      overflow-x: auto;
+      white-space: nowrap;
+      flex-shrink: 0;
+      -webkit-overflow-scrolling: touch;
+      scrollbar-width: none;
+    }
+    .stop-strip::-webkit-scrollbar { display: none; }
+    .stop-chip {
+      display: inline-flex;
+      flex-direction: column;
+      align-items: center;
+      background: #F5F5F5;
+      border-radius: 12px;
+      padding: 8px 12px;
+      margin-right: 8px;
+      cursor: pointer;
+      border: 2px solid transparent;
+      transition: border-color .15s;
+      vertical-align: top;
+      min-width: 72px;
+    }
+    .stop-chip.active { border-color: #C97826; background: #FEF3E2; }
+    .stop-chip-icon { font-size: 13px; margin-bottom: 2px; }
+    .stop-chip-name { font-size: 11px; font-weight: 700; color: #1A1A1A; white-space: nowrap; max-width: 72px; overflow: hidden; text-overflow: ellipsis; }
+    .stop-chip-km { font-size: 10px; color: #888; margin-top: 1px; }
+
+    /* Bottom sheet */
+    .stop-sheet {
+      position: absolute;
+      bottom: 0; left: 0; right: 0;
+      background: #fff;
+      border-radius: 20px 20px 0 0;
+      padding: 20px 20px 28px;
+      box-shadow: 0 -4px 20px rgba(0,0,0,.12);
+      transform: translateY(100%);
+      transition: transform .25s ease;
+      z-index: 10;
+    }
+    .stop-sheet.visible { transform: translateY(0); }
+    .sheet-drag { width: 40px; height: 4px; background: #E0E0E0; border-radius: 2px; margin: 0 auto 16px; }
+    .sheet-title { font-size: 17px; font-weight: 700; color: #1A1A1A; margin-bottom: 4px; }
+    .sheet-sub { font-size: 12px; color: #888; margin-bottom: 14px; }
+    .sheet-row { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+    .sheet-label { font-size: 12px; color: #555; flex: 1; }
+    .sheet-val { font-size: 12px; font-weight: 600; color: #1A1A1A; }
+    .sheet-badge { background: #FEF3E2; border-radius: 8px; padding: 3px 8px; font-size: 11px; color: #C97826; font-weight: 700; }
+    .sheet-close { position: absolute; top: 16px; right: 16px; font-size: 18px; color: #bbb; cursor: pointer; background: none; border: none; }
+    .btn-lista { display: block; width: 100%; background: #1A1A1A; color: #fff; border: none; border-radius: 12px; padding: 14px; font-size: 14px; font-weight: 700; cursor: pointer; margin-top: 16px; text-align: center; }
+
+    /* overlay para fechar sheet */
+    .sheet-overlay { display: none; position: absolute; inset: 0; z-index: 9; }
+    .sheet-overlay.visible { display: block; }
+  </style>
+</head>
 <body>
   <div class="status-bar light">
     <div class="notch"></div>
     <span>9:41</span>
     <div class="status-icons"><span>●●●</span><span>WiFi</span><span>🔋</span></div>
   </div>
-  <div class="screen-content">
-    <div class="roteiro-header">
-      <button class="back-btn" onclick="window.parent.goto('home')" style="background:rgba(255,255,255,.15);color:#fff">←</button>
+
+  <div class="screen-content" style="position:relative; height: calc(100vh - 44px);">
+
+    <!-- Header -->
+    <div class="roteiro-header" style="flex-shrink:0;">
+      <button class="back-btn" onclick="window.parent.goto && window.parent.goto('roteiro')" style="background:rgba(255,255,255,.15);color:#fff">←</button>
       <div style="margin-top:10px">
-        <div class="roteiro-name">Serra da Mantiqueira</div>
-        <div class="roteiro-title">São Paulo → Campos do Jordão</div>
-        <div class="roteiro-meta">847km · 3 dias · 12 paradas</div>
+        <div class="roteiro-name">LELE</div>
+        <div class="roteiro-title">Rio Claro → São Paulo</div>
+        <div class="roteiro-meta">2007km · 1 dia · 12 paradas</div>
       </div>
     </div>
-    <div class="view-toggle">
-      <button class="toggle-btn" onclick="window.parent.goto('roteiro')">📋 Lista</button>
+
+    <!-- Tab toggle -->
+    <div class="view-toggle" style="flex-shrink:0;">
+      <button class="toggle-btn" onclick="window.parent.goto && window.parent.goto('roteiro')">📋 Lista</button>
       <button class="toggle-btn active">🗺️ Mapa</button>
     </div>
-    <div style="flex:1;background:#d8e8d0;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:12px;color:#666;font-size:13px;margin:8px 16px;border-radius:16px;min-height:360px">
-      <div style="font-size:48px">🗺️</div>
-      <div style="font-weight:700">Visualização do Mapa</div>
-      <div style="font-size:11px;color:#888;text-align:center;padding:0 20px">Google Maps com rota traçada,<br>paradas marcadas e alertas de clima</div>
-      <div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:center;padding:0 16px">
-        <span style="background:#fff;border-radius:20px;padding:4px 10px;font-size:11px;font-weight:700;color:#1A1A1A">🏁 SP</span>
-        <span style="background:#fff;border-radius:20px;padding:4px 10px;font-size:11px;font-weight:700;color:#C97826">● Pinda</span>
-        <span style="background:#fff;border-radius:20px;padding:4px 10px;font-size:11px;font-weight:700;color:#C97826">● Cunha</span>
-        <span style="background:#fff;border-radius:20px;padding:4px 10px;font-size:11px;font-weight:700;color:#16A34A">🏁 CJ</span>
+
+    <!-- Mapa -->
+    <div id="map"></div>
+
+    <!-- Strip de paradas -->
+    <div class="stop-strip" id="stopStrip"></div>
+
+    <!-- Overlay para fechar sheet -->
+    <div class="sheet-overlay" id="overlay" onclick="closeSheet()"></div>
+
+    <!-- Bottom sheet -->
+    <div class="stop-sheet" id="stopSheet">
+      <button class="sheet-close" onclick="closeSheet()">✕</button>
+      <div class="sheet-drag"></div>
+      <div class="sheet-title" id="sheetTitle">—</div>
+      <div class="sheet-sub" id="sheetSub">—</div>
+      <div class="sheet-row">
+        <span class="sheet-label">Trecho</span>
+        <span class="sheet-val" id="sheetKm">—</span>
       </div>
+      <div class="sheet-row">
+        <span class="sheet-label">Tempo estimado</span>
+        <span class="sheet-val" id="sheetDur">—</span>
+      </div>
+      <div class="sheet-row" id="sheetWeatherRow">
+        <span class="sheet-label">Clima</span>
+        <span class="sheet-badge" id="sheetWeather">—</span>
+      </div>
+      <div class="sheet-row" id="sheetFuelRow">
+        <span class="sheet-label">Posto próximo</span>
+        <span class="sheet-val" id="sheetFuel">—</span>
+      </div>
+      <button class="btn-lista" onclick="window.parent.goto && window.parent.goto('roteiro')">📋 Ver na Lista</button>
     </div>
-    <div style="padding:0 16px 12px;display:flex;gap:10px">
-      <button class="btn-primary" style="margin:0;flex:1" onclick="window.parent.goto('ativa')">🏍️ Iniciar Viagem</button>
-      <button class="btn-secondary" style="margin:0;flex:0;padding:14px 16px" onclick="window.parent.goto('roteiro')">📋</button>
-    </div>
+
   </div>
+
+  <script>
+    // Dados das paradas (simulando os segmentos da viagem de teste)
+    const stops = [
+      { name: "Rio Claro",    lat: -22.4150, lng: -47.5619, type: "origin",  km: null,  dur: null,   weather: null,         fuel: null },
+      { name: "Limeira",      lat: -22.5646, lng: -47.4013, type: "stop",    km: "47km",  dur: "38min",  weather: "⛅ 18°C",  fuel: "Posto Shell Av. Brasil" },
+      { name: "Campinas",     lat: -22.9056, lng: -47.0608, type: "stop",    km: "56km",  dur: "52min",  weather: "🌧 16°C",  fuel: "Posto Ipiranga Rod. Anhanguera" },
+      { name: "Jundiaí",      lat: -23.1865, lng: -46.8962, type: "stop",    km: "49km",  dur: "45min",  weather: "🌧 15°C",  fuel: "Posto BR Av. Marginal" },
+      { name: "Caieiras",     lat: -23.3609, lng: -46.7402, type: "stop",    km: "38km",  dur: "35min",  weather: "🌦 14°C",  fuel: "Auto Posto Parque São Roberto" },
+      { name: "Guarulhos",    lat: -23.4543, lng: -46.5336, type: "stop",    km: "42km",  dur: "48min",  weather: "🌥 15°C",  fuel: "Posto Petrobras Rod. Dutra" },
+      { name: "São Paulo",    lat: -23.5505, lng: -46.6333, type: "dest",    km: "31km",  dur: "40min",  weather: "⛅ 17°C",  fuel: null },
+    ];
+
+    let map, markers = [], infoWindows = [];
+    let selectedIdx = null;
+
+    function initMap() {
+      map = new google.maps.Map(document.getElementById("map"), {
+        zoom: 9,
+        center: { lat: -22.98, lng: -47.10 },
+        disableDefaultUI: true,
+        zoomControl: true,
+        gestureHandling: "greedy",
+        styles: [
+          { featureType: "poi", elementType: "labels", stylers: [{ visibility: "off" }] },
+          { featureType: "transit", stylers: [{ visibility: "off" }] },
+        ]
+      });
+
+      // Traçar rota via DirectionsService
+      const ds = new google.maps.DirectionsService();
+      const dr = new google.maps.DirectionsRenderer({
+        map,
+        suppressMarkers: true, // usaremos marcadores customizados
+        polylineOptions: {
+          strokeColor: "#C97826",
+          strokeWeight: 5,
+          strokeOpacity: 0.85,
+        }
+      });
+
+      const waypts = stops.slice(1, -1).map(s => ({
+        location: new google.maps.LatLng(s.lat, s.lng),
+        stopover: true,
+      }));
+
+      ds.route({
+        origin: new google.maps.LatLng(stops[0].lat, stops[0].lng),
+        destination: new google.maps.LatLng(stops[stops.length - 1].lat, stops[stops.length - 1].lng),
+        waypoints: waypts,
+        travelMode: google.maps.TravelMode.DRIVING,
+      }, (result, status) => {
+        if (status === "OK") dr.setDirections(result);
+      });
+
+      // Adicionar marcadores customizados
+      stops.forEach((stop, i) => {
+        const isOrigin = stop.type === "origin";
+        const isDest = stop.type === "dest";
+        const label = isOrigin ? "A" : isDest ? "Z" : String(i);
+        const bgColor = isOrigin ? "#16A34A" : isDest ? "#DC2626" : "#C97826";
+
+        const marker = new google.maps.Marker({
+          position: { lat: stop.lat, lng: stop.lng },
+          map,
+          label: { text: label, color: "#fff", fontWeight: "700", fontSize: "11px" },
+          icon: {
+            path: google.maps.SymbolPath.CIRCLE,
+            scale: 14,
+            fillColor: bgColor,
+            fillOpacity: 1,
+            strokeColor: "#fff",
+            strokeWeight: 2,
+          },
+          title: stop.name,
+          zIndex: isOrigin || isDest ? 10 : 5,
+        });
+
+        const iw = new google.maps.InfoWindow({
+          content: buildInfoWindowContent(stop, i),
+          pixelOffset: new google.maps.Size(0, -20),
+        });
+
+        marker.addListener("click", () => selectStop(i));
+        markers.push(marker);
+        infoWindows.push(iw);
+      });
+
+      buildStrip();
+    }
+
+    function buildInfoWindowContent(stop, i) {
+      if (stop.type === "origin") {
+        return `<div style="font-size:13px;font-weight:700;padding:4px 2px">🟢 ${stop.name}<br><span style="font-size:11px;color:#888;font-weight:400">Ponto de partida</span></div>`;
+      }
+      if (stop.type === "dest") {
+        return `<div style="font-size:13px;font-weight:700;padding:4px 2px">🔴 ${stop.name}<br><span style="font-size:11px;color:#888;font-weight:400">Destino final</span></div>`;
+      }
+      return `<div style="font-size:13px;font-weight:700;padding:4px 2px">🟠 ${stop.name}<br><span style="font-size:11px;color:#888;font-weight:400">${stop.km} · ${stop.dur}</span></div>`;
+    }
+
+    function buildStrip() {
+      const strip = document.getElementById("stopStrip");
+      stops.forEach((stop, i) => {
+        const icon = stop.type === "origin" ? "🟢" : stop.type === "dest" ? "🔴" : `🟠`;
+        const chip = document.createElement("div");
+        chip.className = "stop-chip";
+        chip.id = `chip-${i}`;
+        chip.innerHTML = `
+          <span class="stop-chip-icon">${icon}</span>
+          <span class="stop-chip-name">${stop.name}</span>
+          <span class="stop-chip-km">${stop.km ?? "partida"}</span>
+        `;
+        chip.addEventListener("click", () => selectStop(i));
+        strip.appendChild(chip);
+      });
+    }
+
+    function selectStop(i) {
+      // Atualizar chip ativo
+      if (selectedIdx !== null) {
+        document.getElementById(`chip-${selectedIdx}`)?.classList.remove("active");
+        infoWindows[selectedIdx]?.close();
+      }
+      selectedIdx = i;
+      document.getElementById(`chip-${i}`)?.classList.add("active");
+      document.getElementById(`chip-${i}`)?.scrollIntoView({ behavior: "smooth", inline: "center", block: "nearest" });
+
+      // Pan para o marcador e abrir InfoWindow
+      map.panTo(markers[i].getPosition());
+      infoWindows[i].open(map, markers[i]);
+
+      // Preencher e mostrar bottom sheet
+      const stop = stops[i];
+      document.getElementById("sheetTitle").textContent = stop.name;
+      document.getElementById("sheetSub").textContent =
+        stop.type === "origin" ? "Ponto de partida" :
+        stop.type === "dest" ? "Destino final" :
+        `Parada ${i}`;
+
+      document.getElementById("sheetKm").textContent = stop.km ?? "—";
+      document.getElementById("sheetDur").textContent = stop.dur ?? "—";
+
+      const wRow = document.getElementById("sheetWeatherRow");
+      if (stop.weather) {
+        document.getElementById("sheetWeather").textContent = stop.weather;
+        wRow.style.display = "flex";
+      } else {
+        wRow.style.display = "none";
+      }
+
+      const fRow = document.getElementById("sheetFuelRow");
+      if (stop.fuel) {
+        document.getElementById("sheetFuel").textContent = stop.fuel;
+        fRow.style.display = "flex";
+      } else {
+        fRow.style.display = "none";
+      }
+
+      document.getElementById("stopSheet").classList.add("visible");
+      document.getElementById("overlay").classList.add("visible");
+    }
+
+    function closeSheet() {
+      document.getElementById("stopSheet").classList.remove("visible");
+      document.getElementById("overlay").classList.remove("visible");
+      if (selectedIdx !== null) {
+        document.getElementById(`chip-${selectedIdx}`)?.classList.remove("active");
+        infoWindows[selectedIdx]?.close();
+        selectedIdx = null;
+      }
+    }
+  </script>
+
+  <!-- Google Maps JavaScript API -->
+  <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyDGpt2YcWCYzkdjUQttEWQkuTLwwd2VIXo&callback=initMap&language=pt-BR" async defer></script>
+
   <nav class="bottom-nav">
-    <button class="nav-item" onclick="window.parent.goto('home')">
+    <button class="nav-item" onclick="window.parent.goto && window.parent.goto('home')">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
       Início
     </button>
-    <button class="nav-item  active" onclick="window.parent.goto('realizadas')">
+    <button class="nav-item active">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
       Viagens
     </button>
-    <button class="nav-item" onclick="window.parent.goto('ativa')">
+    <button class="nav-item" onclick="window.parent.goto && window.parent.goto('ativa')">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="3 11 22 2 13 21 11 13 3 11"/></svg>
       Em Moto
     </button>
-    <button class="nav-item" onclick="window.parent.goto('perfil')">
+    <button class="nav-item" onclick="window.parent.goto && window.parent.goto('perfil')">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
       Perfil
     </button>
   </nav>
-</body></html>
+</body>
+</html>

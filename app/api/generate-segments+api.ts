@@ -68,20 +68,26 @@ function pickWaypointsFromSteps(
 }
 
 async function reverseGeocode(lat: number, lng: number): Promise<string> {
-  const url = `https://maps.googleapis.com/maps/api/geocode/json?latlng=${lat},${lng}&language=pt-BR&result_type=locality|administrative_area_level_2&key=${GOOGLE_KEY}`;
-  const res = await fetch(url);
-  const json = await res.json();
-  if (json.status === "OK" && json.results.length > 0) {
-    // Prefer "locality" (city), fall back to first result
-    const locality = json.results.find((r: any) =>
-      r.types.includes("locality") || r.types.includes("administrative_area_level_2")
-    );
-    const result = locality ?? json.results[0];
-    // Return short name: first address component that is locality or admin_area_2
-    const comp = result.address_components.find((c: any) =>
-      c.types.includes("locality") || c.types.includes("administrative_area_level_2")
-    );
-    return comp?.long_name ?? result.formatted_address.split(",")[0];
+  const url = `https://maps.googleapis.com/maps/api/geocode/json?latlng=${lat},${lng}&language=pt-BR&key=${GOOGLE_KEY}`;
+  try {
+    const res = await fetch(url);
+    const json = await res.json();
+    if (json.status === "OK" && json.results.length > 0) {
+      const priority = [
+        "locality", "sublocality",
+        "administrative_area_level_4", "administrative_area_level_3",
+        "administrative_area_level_2", "administrative_area_level_1",
+      ];
+      for (const result of json.results) {
+        for (const type of priority) {
+          const comp = result.address_components?.find((c: any) => c.types.includes(type));
+          if (comp) return comp.long_name;
+        }
+      }
+      return json.results[0].formatted_address.split(",")[0];
+    }
+  } catch {
+    // fall through to coordinate fallback
   }
   return `${lat.toFixed(4)},${lng.toFixed(4)}`;
 }

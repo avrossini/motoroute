@@ -20,6 +20,7 @@
     "@expo/vector-icons": "^14.0.0",
     "@opentelemetry/api": "^1.9.1",
     "@react-native-async-storage/async-storage": "1.23.1",
+    "@react-native-community/datetimepicker": "8.0.1",
     "@supabase/supabase-js": "^2.45.0",
     "expo": "~51.0.0",
     "expo-constants": "~16.0.0",

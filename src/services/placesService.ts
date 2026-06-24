@@ -8,20 +8,30 @@ export interface StopSuggestion {
   longitude: number;
 }
 
+export interface StopSuggestionsResult {
+  results: StopSuggestion[];
+  low_rating: boolean;
+  radius_km: number;
+}
+
 export async function fetchStopSuggestions(
   lat: number,
   lng: number
-): Promise<StopSuggestion[]> {
+): Promise<StopSuggestionsResult> {
   try {
     const res = await fetch("/api/places-stop", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ lat, lng }),
     });
-    if (!res.ok) return [];
-    const { results } = await res.json();
-    return results ?? [];
+    if (!res.ok) return { results: [], low_rating: false, radius_km: 5 };
+    const json = await res.json();
+    return {
+      results: json.results ?? [],
+      low_rating: json.low_rating ?? false,
+      radius_km: json.radius_km ?? 5,
+    };
   } catch {
-    return [];
+    return { results: [], low_rating: false, radius_km: 5 };
   }
 }

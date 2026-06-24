@@ -44,11 +44,39 @@ Todas as regras se aplicam igualmente à versão mobile e à versão web.
 - Variação de temperatura **> 5°C** entre trechos consecutivos → alerta de mudança climática (ex: entrada em SC)
 
 ## Sugestão de pontos de parada
-- Buscar no raio de **5 km** de cada ponto de parada do roteiro
-- Filtrar por: posto de combustível COM restaurante (prioridade), avaliação mínima 4.0
-- Exibir: nome, avaliação, total de reviews, status 24h, distância do ponto ideal
-- Permitir trocar a sugestão por outra opção próxima (lista de alternativas)
-- Posto Fazendeiro (Miracatu SP, BR-116 km 385) é exemplo de parada obrigatória — respeitar sempre
+
+Todo trecho intermediário do roteiro (exceto o último, que termina no destino final ou na hospedagem) **deve terminar em um posto de combustível**. Não existe parada sem local de parada — o usuário não para no meio da estrada.
+
+### Lógica de seleção em três níveis
+
+A busca é feita via Google Places API (`type=gas_station`) e percorre os níveis abaixo até encontrar um resultado:
+
+**Nível 1 — Preferencial (5 km, rating ≥ 4.0)**
+- Busca postos num raio de 5 km com avaliação ≥ 4.0.
+- Se houver resultados:
+  - Prioridade 1: posto já favoritado pelo usuário (tabela `favorites`).
+  - Prioridade 2: posto com maior avaliação.
+- Nenhum alerta de qualidade é exibido.
+
+**Nível 2 — Fallback de qualidade (5 km, qualquer avaliação)**
+- Acionado apenas se o Nível 1 não retornou resultados.
+- Mesmos 5 km, sem filtro de avaliação (inclui postos abaixo de 4.0 ou sem avaliação).
+- Se houver resultados: seleciona o de maior avaliação.
+- Exibir alerta: **⚠ Avaliação baixa — confirme antes de ir**.
+
+**Nível 3 — Expansão de raio (10 km, 15 km, 20 km… até 50 km)**
+- Acionado apenas se o Nível 2 também não retornou resultados (genuinamente nenhum posto dentro de 5 km).
+- O raio cresce de 5 em 5 km a cada tentativa, até o máximo de 50 km.
+- Seleciona o de maior avaliação entre os encontrados no primeiro raio com resultado.
+- Exibir alerta **⚠ Avaliação baixa — confirme antes de ir** se o posto selecionado tiver avaliação < 4.0.
+
+### Regra geral do alerta de qualidade
+Qualquer posto com avaliação < 4.0 exibe **⚠ Avaliação baixa — confirme antes de ir**, independente do nível em que foi encontrado.
+
+### Exibição
+- Exibir por parada: nome, avaliação, total de reviews, status 24h.
+- Permitir trocar a sugestão por outra opção próxima (lista de alternativas — ver seção **Alternativas de parada**).
+- Posto Fazendeiro (Miracatu SP, BR-116 km 385) é exemplo de parada obrigatória — respeitar sempre.
 
 ## Previsão do tempo
 - Consultar por **cidade de referência** de cada trecho, não pela rota exata
@@ -156,6 +184,20 @@ O bloco de pernoite no fim de cada day card (exceto o último dia) tem 3 estados
 - Editável a qualquer momento antes ou durante a viagem
 
 ## Previsão do tempo — janela e atualização
+
+### Estados do painel de clima por trecho
+
+| Estado | Condição | Visual |
+|--------|----------|--------|
+| **Bloqueado** | Data do trecho > 7 dias | 🔒 + contador "Prev. em Xd" |
+| **Sem dados** | Data ≤ 7 dias, mas `weather_condition` ainda é null | "—" + "Sem dados" |
+| **Disponível** | `weather_condition` preenchido | ícone + temperatura + chuva% + vento |
+
+- O estado "Sem dados" ocorre quando o clima nunca foi buscado para aquele trecho (ex: trecho recém-inserido antes da primeira atualização de clima)
+- O estado "Sem dados" **não é** um erro — é esperado logo após inserção de parada; o usuário pode usar o botão "Atualizar Clima" para preencher
+- Ao inserir uma nova parada, o clima é buscado automaticamente para os novos trechos (se dentro da janela de 7 dias) — o estado "Sem dados" dura apenas o tempo da requisição
+
+### Atualização
 - O card de clima de cada trecho fica **bloqueado** quando a data da viagem está a mais de 7 dias
 - Exibir contador regressivo: "Clima disponível em X dias"
 - Quando dentro da janela de 7 dias: exibir botão explícito "🔄 Atualizar previsão" com timestamp da última consulta ("Atualizado há Xh")
@@ -165,22 +207,45 @@ O bloco de pernoite no fim de cada day card (exceto o último dia) tem 3 estados
 ## Inserção manual de paradas no roteiro
 
 ### Via lista (view padrão)
-- Entre cada par de trechos no roteiro gerado, exibir botão `+` discreto
+- Cada card de trecho tem um botão `+` no canto superior direito
+- O botão é explícito: inserir uma parada **neste trecho** (não entre dois trechos)
 - Ao tocar: abrir campo de busca (cidade, endereço, nome de estabelecimento)
-- App insere o ponto, recalcula os segmentos afetados e revalida a regra de km
-- Alertar se a inserção criar trecho < 100 km ou > 200 km, com sugestão de ajuste
 
 ### Via mapa
 - View alternativa ao roteiro em lista, acessível por toggle "Lista ↔ Mapa" no topo
 - Exibe a rota completa no mapa com marcadores em cada parada
 - Usuário toca em qualquer ponto da rota ou arredores para adicionar parada
 - Long press em ponto existente: opções de remover ou mover a parada
-- Confirmação antes de recalcular ao tocar no mapa
 
-### Regras de recálculo após inserção
-- Recalcular apenas os segmentos afetados (não toda a rota)
-- Preservar paradas obrigatórias definidas pelo usuário
-- Exibir resumo das mudanças antes de confirmar: "Trecho X dividido em 2 · +Xkm · +Xmin"
+### Fluxo de inserção — 4 fases obrigatórias
+
+Toda inserção de parada percorre as mesmas fases antes de qualquer persistência.
+
+#### Fase 1 — Geocodificação
+- Converter o ponto inserido para lat/lng via Google Geocoding API
+
+#### Fase 2 — Preview dos novos trechos
+- Directions API calcula `A → P` e `P → B` (2 chamadas em paralelo), onde A→B é o trecho clicado
+- Se qualquer sub-trecho resultante exceder `trips.max_stop_km`, ele é automaticamente subdividido em múltiplos trechos via `generateSegments`
+- Exibir lista de **todos** os novos trechos que serão criados, com nome, km e duração de cada um
+- Exibir desvio em km (distância perpendicular do ponto ao segmento original) com aviso se > 50 km
+
+#### Fase 3 — Confirmação obrigatória
+- Exibir modal com a lista de novos trechos antes de qualquer mudança persistida
+- Botões: **Confirmar** e **Cancelar** (cancelar não gera nenhum efeito colateral)
+
+#### Fase 4 — Persistência cirúrgica
+- O trecho clicado é removido e substituído pelos N novos trechos (split cirúrgico)
+- `order_index` dos demais trechos é ajustado para abrir espaço
+- Caches da viagem atualizados: `total_distance_km`, `total_duration_min`, `stop_count`
+- Postos de combustível buscados automaticamente para todos os novos trechos intermediários
+- Previsão do tempo buscada automaticamente para todos os novos trechos (se dentro da janela de 7 dias)
+
+### Regras gerais
+- **Nunca persistir** a parada sem passar pela Fase 3 (confirmação)
+- **Nunca estimar** distâncias — sempre Directions API
+- Preservar paradas obrigatórias definidas pelo usuário em qualquer tipo de recálculo
+- Durante viagem ativa (`trips.status = 'active'`): o fluxo é idêntico; o banner de aviso de viagem ativa (ver seção "Edições durante viagem ativa") é exibido antes de abrir o campo de busca
 
 ## Alternativas de parada
 - Disponível a qualquer momento: durante o planejamento e durante a viagem
@@ -188,6 +253,37 @@ O bloco de pernoite no fim de cada day card (exceto o último dia) tem 3 estados
 - Exibe lista de até 5 opções próximas com: nome, avaliação, distância do ponto ideal, status 24h
 - Ao selecionar alternativa: substitui a sugestão atual e persiste no roteiro
 - Durante a viagem: alternativas ordenadas por distância da posição atual
+
+### Delta de distância por alternativa
+
+Ao abrir a lista de alternativas, o app exibe para cada opção o impacto que ela teria nos trechos adjacentes:
+
+- **Delta do trecho anterior:** diferença em km entre a origem do segmento e a alternativa vs. a distância até a parada atual. Exibido como `+X km` (se mais distante) ou `−X km` (se mais próximo), em verde para negativo e laranja para positivo.
+- O delta é calculado em tempo real via Google Directions API no momento em que o modal abre, usando a origem do segmento como ponto de partida. **Nunca estimar — sempre usar Directions API.**
+- As 5 chamadas são disparadas em paralelo (`Promise.all`) para minimizar latência. Enquanto carregam, exibir skeleton/spinner na coluna de delta.
+- O delta **não é persistido** no banco — é calculado sob demanda a cada abertura do modal.
+
+### Recálculo ao selecionar alternativa
+
+Ao confirmar a troca de parada, o app recalcula automaticamente os dois segmentos afetados:
+
+1. O segmento que **termina** na parada trocada: nova distância e duração calculadas via Directions API (origem → nova parada, incluindo waypoints intermediários desse segmento se houver).
+2. O segmento que **começa** na parada trocada: nova distância e duração calculadas via Directions API (nova parada → destino, incluindo waypoints intermediários desse segmento se houver).
+3. Os dois segmentos são atualizados no banco com os novos valores de `distance_km` e `duration_minutes`.
+4. Os campos cache da viagem (`total_distance_km`, `total_duration_min`) são recalculados via `SUM` dos segmentos após a atualização.
+
+O botão "Recalcular Rota" completo continua existindo para o usuário forçar um recálculo global. A troca de parada dispara apenas o recálculo localizado dos dois segmentos adjacentes — não de toda a rota.
+
+### Galeria de fotos por alternativa
+
+Cada alternativa de parada pode exibir fotos do local para auxiliar na tomada de decisão (limpeza, estrutura, conveniência). As fotos vêm da **Google Places Photos API** e **não são persistidas no banco** — são buscadas sob demanda via `place_id`.
+
+- Ao tocar em "ver fotos" de uma alternativa, o app faz uma chamada de **Place Details** (`fields=photos`) para aquele `place_id`.
+- O retorno inclui até 10 `photo_reference` tokens. O app exibe as **3 primeiras fotos** em scroll horizontal num sub-modal (galeria).
+- Cada imagem é carregada via URL `https://maps.googleapis.com/maps/api/place/photo?maxwidth=800&photo_reference={token}&key={KEY}`.
+- Os tokens **não são armazenados** — expiram em horas e são buscados frescos a cada abertura.
+- A chamada é **lazy**: só acontece quando o usuário toca explicitamente em "ver fotos". Não pré-carrega para todas as alternativas ao abrir o modal.
+- Se o local não tiver fotos cadastradas no Google, exibir placeholder com ícone neutro.
 
 ---
 
