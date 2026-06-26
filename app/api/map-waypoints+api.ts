@@ -1,7 +1,7 @@
 const SUPABASE_ANON = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY ?? "";
 // In Docker the expo container can't reach localhost:54321 — use internal service name instead
 const SUPABASE_REST =
-  (process.env.EXPO_PUBLIC_SUPABASE_URL ?? "").replace("localhost:54321", "kong:8000");
+  (process.env.EXPO_PUBLIC_SUPABASE_URL ?? "").replace(/localhost:54321|127\.0\.0\.1:54321/, "kong:8000");
 
 export async function GET(request: Request): Promise<Response> {
   const url = new URL(request.url);

@@ -28,6 +28,7 @@ interface SegmentPoint {
   endLng: number;
   distKm: number;
   durationMin: number;
+  startStepIndex: number;
   endStepIndex: number;
 }
 
@@ -98,6 +99,7 @@ function buildSegmentsFromSteps(
   let segStartLng = legStartLng;
   let segDistKm = 0;
   let segDurationMin = 0;
+  let segStartStepIndex = 0;
   let nextCut = spacing;
 
   for (let i = 0; i < steps.length; i++) {
@@ -117,12 +119,14 @@ function buildSegmentsFromSteps(
         endLng: step.end_location.lng,
         distKm: segDistKm,
         durationMin: segDurationMin,
+        startStepIndex: segStartStepIndex,
         endStepIndex: i,
       });
       segStartLat = step.end_location.lat;
       segStartLng = step.end_location.lng;
       segDistKm = 0;
       segDurationMin = 0;
+      segStartStepIndex = i + 1;
       nextCut = (segmentPoints.length + 1) * spacing;
     }
   }
@@ -135,10 +139,29 @@ function buildSegmentsFromSteps(
     endLng: lastStep.end_location.lng,
     distKm: segDistKm,
     durationMin: segDurationMin,
+    startStepIndex: segStartStepIndex,
     endStepIndex: steps.length - 1,
   });
 
   return segmentPoints;
+}
+
+function extractMainRoad(steps: any[]): string {
+  const roadKm = new Map<string, number>();
+  for (const step of steps) {
+    const html: string = step.html_instructions ?? "";
+    for (const m of html.matchAll(/<b>([^<]+)<\/b>/g)) {
+      const name = m[1].trim();
+      if (/^[A-Z]{2,}-\d{2,}/.test(name)) {
+        roadKm.set(name, (roadKm.get(name) ?? 0) + (step.distance?.value ?? 0));
+      }
+    }
+  }
+  let best = ""; let bestMeters = 0;
+  for (const [road, meters] of roadKm) {
+    if (meters > bestMeters) { best = road; bestMeters = meters; }
+  }
+  return best;
 }
 
 function isTechLabel(name: string): boolean {
@@ -379,7 +402,8 @@ export async function POST(request: Request): Promise<Response> {
     startLat: number; startLng: number;
     endLat: number; endLng: number;
     distKm: number; durationMin: number;
-    legSteps: any[];   // steps of the parent leg (for city-snapping)
+    legSteps: any[];
+    startStepIndex: number;
     endStepIndex: number;
   }
 
@@ -406,6 +430,7 @@ export async function POST(request: Request): Promise<Response> {
         distKm: legKm,
         durationMin: leg.duration.value / 60,
         legSteps,
+        startStepIndex: 0,
         endStepIndex: legSteps.length - 1,
       });
     }
@@ -480,7 +505,7 @@ export async function POST(request: Request): Promise<Response> {
       dest_lng: seg.endLng,
       distance_km: Math.round(seg.distKm * 10) / 10,
       duration_minutes: Math.round(seg.durationMin),
-      route_summary: route2Summary,
+      route_summary: extractMainRoad(seg.legSteps.slice(seg.startStepIndex, seg.endStepIndex + 1)) || route2Summary,
       has_alert: alerts.length > 0,
       alert_types: alerts.length > 0 ? alerts : null,
       waypoint_lat: wpsForApi[i]?.lat ?? null,
