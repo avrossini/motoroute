@@ -36,15 +36,21 @@ import TripMap from "@/components/TripMap";
 interface LodgingSuggestion {
   id: string;
   day_index: number;
+  source: string;
   name: string;
+  address: string | null;
   rating: number | null;
   price_level: number | null;
   city: string;
   checkin_date: string;
   checkout_date: string;
-  latitude: number;
-  longitude: number;
+  latitude: number | null;
+  longitude: number | null;
   is_reserved: boolean;
+  guest_count: number;
+  booking_url: string | null;
+  parking_status: string;
+  breakfast_status: string;
 }
 
 function addDays(dateStr: string, days: number): string {
@@ -367,7 +373,11 @@ function LodgingBlock({
   }
 
   const bgColor = lodgingItem.is_reserved ? "#14532D" : "#1E3A5F";
-  const bookingUrl = `https://www.booking.com/searchresults.html?ss=${encodeURIComponent(lodgingItem.city || destCity)}&checkin=${checkin}&checkout=${checkout}`;
+
+  function openExternalLink(url: string) {
+    if (Platform.OS === "web") (window as any).open(url, "_blank");
+    else Linking.openURL(url);
+  }
 
   return (
     <View style={[styles.lodgingCard, { backgroundColor: bgColor }]}>
@@ -392,12 +402,14 @@ function LodgingBlock({
         )}
       </View>
       <View style={styles.lodgingActions}>
-        <TouchableOpacity
-          style={styles.lodgingActionBtn}
-          onPress={() => Linking.openURL(bookingUrl)}
-        >
-          <Text style={styles.lodgingActionText}>Ver no Booking</Text>
-        </TouchableOpacity>
+        {lodgingItem.booking_url != null && (
+          <TouchableOpacity
+            style={styles.lodgingActionBtn}
+            onPress={() => openExternalLink(lodgingItem.booking_url!)}
+          >
+            <Text style={styles.lodgingActionText}>🌐 Ver link externo</Text>
+          </TouchableOpacity>
+        )}
         <TouchableOpacity
           style={[styles.lodgingActionBtn, styles.lodgingActionSecondary]}
           onPress={() => onReservedToggle(lodgingItem)}
@@ -547,7 +559,9 @@ export default function TripDetailScreen() {
         lmap.set(l.day_index, {
           id: l.id,
           day_index: l.day_index,
+          source: (l as any).source ?? "auto",
           name: l.name,
+          address: (l as any).address ?? null,
           rating: l.rating,
           price_level: l.price_level,
           city: l.city,
@@ -556,6 +570,10 @@ export default function TripDetailScreen() {
           latitude: l.latitude,
           longitude: l.longitude,
           is_reserved: l.is_reserved ?? false,
+          guest_count: (l as any).guest_count ?? 1,
+          booking_url: (l as any).booking_url ?? null,
+          parking_status: (l as any).parking_status ?? "unknown",
+          breakfast_status: (l as any).breakfast_status ?? "unknown",
         });
       }
       setLodging(lmap);
@@ -665,31 +683,34 @@ export default function TripDetailScreen() {
       : { data: null };
     const favSet = new Set((favData ?? []).map((f: any) => f.place_id));
 
-    await Promise.allSettled(
-      intermediateSegs.map(async (seg) => {
-        const { results } = await fetchStopSuggestions(seg.dest_lat, seg.dest_lng);
-        if (results.length === 0) return;
+    const BATCH = 8;
+    for (let i = 0; i < intermediateSegs.length; i += BATCH) {
+      await Promise.allSettled(
+        intermediateSegs.slice(i, i + BATCH).map(async (seg) => {
+          const { results } = await fetchStopSuggestions(seg.dest_lat, seg.dest_lng);
+          if (results.length === 0) return;
 
-        // Prefer favorited station; otherwise pick highest-rated (already sorted desc)
-        const favorited = results.find((s) => favSet.has(s.place_id));
-        const selectedId = (favorited ?? results[0]).place_id;
+          // Prefer favorited station; otherwise pick highest-rated (already sorted desc)
+          const favorited = results.find((s) => favSet.has(s.place_id));
+          const selectedId = (favorited ?? results[0]).place_id;
 
-        await supabase.from("stop_suggestions").delete().eq("segment_id", seg.id);
-        await supabase.from("stop_suggestions").insert(
-          results.map((s) => ({
-            segment_id: seg.id,
-            place_id: s.place_id,
-            name: s.name,
-            rating: s.rating,
-            total_ratings: s.total_ratings,
-            is_24h: s.is_24h,
-            latitude: s.latitude,
-            longitude: s.longitude,
-            is_selected: s.place_id === selectedId,
-          }))
-        );
-      })
-    );
+          await supabase.from("stop_suggestions").delete().eq("segment_id", seg.id);
+          await supabase.from("stop_suggestions").insert(
+            results.map((s) => ({
+              segment_id: seg.id,
+              place_id: s.place_id,
+              name: s.name,
+              rating: s.rating,
+              total_ratings: s.total_ratings,
+              is_24h: s.is_24h,
+              latitude: s.latitude,
+              longitude: s.longitude,
+              is_selected: s.place_id === selectedId,
+            }))
+          );
+        })
+      );
+    }
   }
 
   async function confirmDeleteTrip() {
@@ -1176,8 +1197,18 @@ export default function TripDetailScreen() {
         activeTripVal.min_stop_km,
         activeTripVal.max_stop_km,
         activeTripVal.num_days,
-        manualWps.length > 0 ? manualWps : undefined
+        manualWps.length > 0 ? manualWps : undefined,
+        activeTripVal.trip_type
       );
+
+      if (result.avg_daily_km && result.avg_daily_km > 500) {
+        const isExtremo = (result.avg_daily_km ?? 0) > 650;
+        Alert.alert(
+          isExtremo ? "Expedição muito puxada" : "Ritmo intenso",
+          `Esta expedição terá média de ${result.avg_daily_km} km por dia. Para uma viagem de moto, considere adicionar mais dias ou revisar o ritmo.`,
+          [{ text: "Entendi" }]
+        );
+      }
 
       const supabase = getSupabase();
       await supabase.from("segments").delete().eq("trip_id", id);
@@ -1385,6 +1416,16 @@ export default function TripDetailScreen() {
                   destinName={lastSeg.destination_name ?? ""}
                   totalKm={dayTotalKm}
                 />
+                {/* day alert banner — shown when daily distance exceeds 500 km */}
+                {dayTotalKm > 500 && (
+                  <View style={styles.dayAlertBanner}>
+                    <Text style={styles.dayAlertText}>
+                      {dayTotalKm > 650
+                        ? `⚠️ Dia intenso: ${Math.round(dayTotalKm)} km — acima do recomendado`
+                        : `ℹ️ Dia puxado: ${Math.round(dayTotalKm)} km`}
+                    </Text>
+                  </View>
+                )}
                 <View style={styles.dayBody}>
                   {daySegs.map((seg, segIdx) => {
                     const globalIdx = segments.indexOf(seg);
@@ -1453,15 +1494,27 @@ export default function TripDetailScreen() {
                           </TouchableOpacity>
                         )}
                         {showLodging && (
-                          <LodgingBlock
-                            tripId={id}
-                            dayIndex={dayIdx}
-                            departureDate={trip.departure_date}
-                            destCity={seg.destination_name ?? seg.origin_name ?? ""}
-                            lodgingItem={lodging.get(dayIdx)}
-                            onReservedToggle={toggleReserved}
-                            onSearchPress={() => openLodgingSearch(dayIdx, seg.destination_name ?? "")}
-                          />
+                          <>
+                            {seg.alert_types?.includes("pernoite_sem_cidade") && (
+                              <Text style={styles.pernoiteWarning}>
+                                ⚠️ Fim de dia em ponto sem cidade confirmada — verifique o local de pernoite
+                              </Text>
+                            )}
+                            {seg.alert_types?.includes("pernoite_ajustado") && (
+                              <Text style={styles.pernoiteInfo}>
+                                ℹ️ Dia ajustado para terminar em cidade com melhor estrutura
+                              </Text>
+                            )}
+                            <LodgingBlock
+                              tripId={id}
+                              dayIndex={dayIdx}
+                              departureDate={trip.departure_date}
+                              destCity={seg.destination_name ?? seg.origin_name ?? ""}
+                              lodgingItem={lodging.get(dayIdx)}
+                              onReservedToggle={toggleReserved}
+                              onSearchPress={() => openLodgingSearch(dayIdx, seg.destination_name ?? "")}
+                            />
+                          </>
                         )}
                       </View>
                     );
@@ -2096,6 +2149,31 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     shadowOffset: { width: 0, height: 2 },
     elevation: 2,
+  },
+  dayAlertBanner: {
+    backgroundColor: "#FFF3CD",
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+  },
+  dayAlertText: {
+    fontSize: 12,
+    color: "#7A5400",
+    fontWeight: "500",
+  },
+  pernoiteWarning: {
+    fontSize: 12,
+    color: "#B45309",
+    backgroundColor: "#FFF3CD",
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    fontWeight: "500",
+  },
+  pernoiteInfo: {
+    fontSize: 12,
+    color: "#1D4ED8",
+    backgroundColor: "#EFF6FF",
+    paddingHorizontal: 14,
+    paddingVertical: 6,
   },
   dayHeader: {
     backgroundColor: "#1A1A1A",

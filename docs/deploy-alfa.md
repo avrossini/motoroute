@@ -25,16 +25,24 @@ Quando aparecer **👤 VOCÊ FAZ**, siga as instruções e me avise quando termi
   
        ↓                                                  ↓
 [3] EAS Build                                    [4] Vercel (web)
-  APK para Android                                 site no browser
+  APK para Android                                 app.motoroute.com.br
 
   🤖 Claude roda build                            👤 criar conta
   👤 compartilhar link                            🌐 Claude configura
+                                                  👤 configurar DNS
                                                   🌐 Claude faz deploy
        ↓
 [5] Distribuição
   testers instalam APK + acessam o site
   👤 você envia links
 ```
+
+### Estrutura de domínios
+
+| URL | O que é |
+|-----|---------|
+| `motoroute.com.br` | Landing page pública (marketing, SEO) — **fora do escopo desta alfa** |
+| `app.motoroute.com.br` | A aplicação (Vercel) — **o que vamos configurar agora** |
 
 ---
 
@@ -143,8 +151,10 @@ O `supabase login` abre o browser pedindo autorização — você só clica em *
 > **🌐 CLAUDE FAZ (browser)**
 
 Vou navegar até Authentication → URL Configuration e configurar:
-- Site URL: URL do Vercel (definida na Parte 4 — voltamos aqui depois)
-- Redirect URLs: `motoroute://auth/callback` (mobile) + URL do Vercel + `/auth/callback` (web)
+- Site URL: `https://app.motoroute.com.br` (voltamos aqui após o domínio estar ativo na Parte 4)
+- Redirect URLs:
+  - `motoroute://auth/callback` (deep link mobile)
+  - `https://app.motoroute.com.br/auth/callback` (web)
 
 ---
 
@@ -237,17 +247,40 @@ Vou navegar pelo painel da Vercel e:
    - `EXPO_PUBLIC_SUPABASE_ANON_KEY`
 4. Disparar o primeiro deploy
 
-Quando terminar, você ganha uma URL pública como `https://motoroute.vercel.app` (ou escolhemos um nome personalizado).
+Quando terminar, o app ficará disponível em uma URL temporária `https://motoroute-*.vercel.app` — usamos só para validar que o deploy funcionou. A URL final será `app.motoroute.com.br`.
 
 ---
 
-### Passo 4.3 — Atualizar Auth com a URL do Vercel
+### Passo 4.3 — Adicionar domínio personalizado na Vercel
+
+> **🌐 CLAUDE FAZ (browser)** + **👤 VOCÊ FAZ** apenas: configurar DNS no registrador
+
+**Claude faz (browser):**
+1. Vou em Settings → Domains no projeto da Vercel
+2. Adiciono `app.motoroute.com.br`
+3. A Vercel exibe os registros DNS que você precisa criar — anoto aqui para você
+
+**Você faz:**
+1. Acessa o painel do seu registrador de domínio (onde registrou `motoroute.com.br`)
+2. Vai em DNS / Gerenciar DNS
+3. Cria um registro **CNAME**:
+   - Nome: `app`
+   - Destino: `cname.vercel-dns.com`
+4. Salva e aguarda propagação (pode levar de 1 a 30 minutos)
+
+**Avise quando criar o registro DNS.** A Vercel detecta automaticamente e emite o certificado SSL. Quando estiver verde no painel da Vercel, o domínio está ativo.
+
+---
+
+### Passo 4.4 — Atualizar Auth com o domínio definitivo
 
 > **🌐 CLAUDE FAZ (browser)**
 
-Volto ao Supabase e completo o Passo 1.5 agora que a URL da Vercel existe:
-- Site URL: `https://motoroute.vercel.app`
-- Redirect URLs: adiciono `https://motoroute.vercel.app/auth/callback`
+Volto ao Supabase e completo o Passo 1.5 agora que o domínio está ativo:
+- Site URL: `https://app.motoroute.com.br`
+- Redirect URLs:
+  - `https://app.motoroute.com.br/auth/callback`
+  - `motoroute://auth/callback`
 
 ---
 
@@ -259,7 +292,7 @@ Volto ao Supabase e completo o Passo 1.5 agora que a URL da Vercel existe:
 
 Você terá dois links para enviar:
 - **APK Android:** link gerado pelo EAS (válido 30 dias; se expirar, eu gero novo)
-- **Web:** `https://motoroute.vercel.app` (permanente, sempre atualizado)
+- **Web:** `https://app.motoroute.com.br` (permanente, sempre atualizado)
 
 ---
 
@@ -272,7 +305,7 @@ Você terá dois links para enviar:
 Você foi convidado para testar o MotoRoute antes do lançamento!
 
 **No computador (planejamento de rotas):**
-👉 https://motoroute.vercel.app
+👉 https://app.motoroute.com.br
 
 **No celular Android (uso em campo):**
 👉 [LINK DO APK]
@@ -326,7 +359,8 @@ Quando quiser:
 **Vercel (web)**
 - [ ] **4.1** Conta Vercel criada — 👤 você
 - [ ] **4.2** Deploy configurado e publicado — 🌐 Claude
-- [ ] **4.3** Auth atualizado com URL do Vercel — 🌐 Claude
+- [ ] **4.3** Domínio `app.motoroute.com.br` configurado — 🌐 Claude + 👤 você (DNS)
+- [ ] **4.4** Auth atualizado com domínio definitivo — 🌐 Claude
 
 **Distribuição**
 - [ ] **5.1** Links enviados para testers — 👤 você
@@ -335,7 +369,7 @@ Quando quiser:
 
 ## Como publicar uma nova versão
 
-**Web** — automático: a cada commit que eu fizer no GitHub, o Vercel publica sozinho em ~2 minutos. Nenhuma ação necessária.
+**Web** — automático: a cada commit que eu fizer no GitHub, o Vercel publica sozinho em ~2 minutos em `https://app.motoroute.com.br`. Nenhuma ação necessária.
 
 **Mobile** — quando quiser atualizar o APK:
 1. Me avise que há mudanças prontas

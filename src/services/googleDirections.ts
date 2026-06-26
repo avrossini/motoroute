@@ -29,6 +29,7 @@ export interface GenerateSegmentsResult {
   segments: SegmentData[];
   total_km: number;
   total_duration_min: number;
+  avg_daily_km?: number | null;
 }
 
 export interface ManualWaypoint {
@@ -43,12 +44,13 @@ export async function generateSegments(
   minStopKm: number,
   maxStopKm: number,
   numDays: number,
-  manualWaypoints?: ManualWaypoint[]
+  manualWaypoints?: ManualWaypoint[],
+  trip_type?: string
 ): Promise<GenerateSegmentsResult> {
   const res = await fetch("/api/generate-segments", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ origin, destination, minStopKm, maxStopKm, numDays, manualWaypoints }),
+    body: JSON.stringify({ origin, destination, minStopKm, maxStopKm, numDays, manualWaypoints, trip_type }),
   });
 
   const data = await res.json();

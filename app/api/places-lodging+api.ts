@@ -1,6 +1,5 @@
 const GOOGLE_KEY = process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY ?? "";
 
-// Forward geocode a city/address to coordinates
 async function geocodeAddress(address: string): Promise<{ lat: number; lng: number; label: string } | null> {
   const url = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(address)}&language=pt-BR&key=${GOOGLE_KEY}`;
   const res = await fetch(url);
@@ -11,6 +10,13 @@ async function geocodeAddress(address: string): Promise<{ lat: number; lng: numb
   return { lat: loc.lat, lng: loc.lng, label };
 }
 
+function inferLodgingType(types: string[]): string {
+  if (types.some((t) => ["hotel", "resort_hotel"].includes(t))) return "hotel";
+  if (types.includes("lodging")) return "pousada";
+  if (types.includes("campground")) return "outro";
+  return "outro";
+}
+
 export async function POST(request: Request): Promise<Response> {
   const { city, lat, lng } = await request.json();
 
@@ -18,7 +24,6 @@ export async function POST(request: Request): Promise<Response> {
   let refLng: number = lng;
   let refLabel: string = city ?? "";
 
-  // If coordinates not provided, geocode the city
   if ((refLat == null || refLng == null) && city) {
     const geo = await geocodeAddress(city);
     if (!geo) {
@@ -39,12 +44,15 @@ export async function POST(request: Request): Promise<Response> {
 
   const results = (json.results ?? [])
     .filter((r: any) => (r.rating ?? 0) >= 3.8)
-    .slice(0, 8)
+    .slice(0, 10)
     .map((r: any) => {
       const rLat: number = r.geometry.location.lat;
       const rLng: number = r.geometry.location.lng;
       const distM = Math.round(
-        Math.sqrt(Math.pow((rLat - refLat) * 111000, 2) + Math.pow((rLng - refLng) * 111000 * Math.cos((refLat * Math.PI) / 180), 2))
+        Math.sqrt(
+          Math.pow((rLat - refLat) * 111000, 2) +
+            Math.pow((rLng - refLng) * 111000 * Math.cos((refLat * Math.PI) / 180), 2)
+        )
       );
       return {
         place_id: r.place_id,
@@ -56,6 +64,9 @@ export async function POST(request: Request): Promise<Response> {
         longitude: rLng,
         distance_m: distM,
         vicinity: r.vicinity ?? "",
+        lodging_type: inferLodgingType(r.types ?? []),
+        parking_status: "unknown",
+        breakfast_status: "unknown",
       };
     })
     .sort((a: any, b: any) => a.distance_m - b.distance_m);

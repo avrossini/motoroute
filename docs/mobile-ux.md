@@ -138,35 +138,48 @@ Esta distinção é absoluta e deve guiar todas as decisões de UX e produto:
 
 #### Estado 1 — Sem hospedagem
 - Botão discreto "＋ Adicionar hospedagem" com fundo sutil
-- Toque abre a tela de busca (`buscar-hospedagem.html`)
+- Toque abre a tela `buscar-hospedagem.html`, que oferece busca automática ou inserção manual
 
 #### Estado 2 — Selecionada (não reservada)
 - Fundo gradiente azul-escuro (navy)
-- Exibe: nome, avaliação com total de reviews, preço por noite, distância do ponto de referência
-- Ações: "🗺 Navegar" · "🏨 Booking.com" · "✓ Marcar como reservado" (texto verde) · "Trocar"
-- "Marcar como reservado" é ação manual — não representa integração com plataforma de reservas
+- Exibe: nome, tipo de hospedagem, avaliação com total de reviews, preço por noite, distância do ponto de referência
+- Ações: "🗺 Navegar" · "🌐 Ver link externo" · "✓ Marcar como reservado" (texto verde) · "Trocar"
+- "Marcar como reservado" é ação manual — não representa integração com nenhuma plataforma de reservas
 
 #### Estado 3 — Reservada
 - Fundo gradiente verde-escuro
 - Badge "✓ RESERVADO" em destaque
-- Avaliação e preço em verde
-- Ações: "🗺 Navegar" · "🏨 Booking.com" · "Desfazer / Trocar" (texto neutro)
+- Ações: "🗺 Navegar" · "🌐 Ver link externo" · "Desfazer reserva" · "Trocar"
+- "Desfazer reserva" volta o bloco para o Estado 2 (selecionada, sem badge de reservado)
 
-### Buscar hospedagem (`buscar-hospedagem.html`)
-- Disparada pelo botão "Adicionar hospedagem" ou "Trocar" no bloco de pernoite
-- Campo de entrada: cidade ou endereço específico
-- Nota de referência exibida abaixo do campo: *"Usando o centro de [Município] como referência. Para refinar, informe um endereço."*
+### Tela de hospedagem (`buscar-hospedagem.html`)
+Disparada pelo botão "Adicionar hospedagem" ou "Trocar" no bloco de pernoite. Oferece dois modos via segmented control no topo:
+
+#### Modo Buscar
+- Contexto exibido como informação (não editável na tela): check-in, checkout, cidade
+- Campo de local (cidade ou endereço específico) com nota de referência: *"Usando o centro de [Município] como referência. Para refinar, informe um endereço."*
+- Painel de preferências (recolhível no mobile, sempre visível na web):
+  - Tipo: Qualquer · Hotel/Pousada · Casa/Apartamento
+  - Garagem: Não filtrar · Preferencial · Obrigatória
+  - Café da manhã: Não filtrar · Preferencial · Obrigatório
+  - Hóspedes: contador numérico
 - Chips de ordenação: Distância · Avaliação · Preço (padrão: Distância)
-- Lista de opções: nome, endereço, avaliação + total de reviews, preço/noite, badge de distância colorido
-  - Verde: < 1 km
-  - Azul: 1–3 km
-  - Cinza: > 3 km
-- Opção atualmente selecionada destacada com borda laranja
-- Botão "Selecionar" em cada card — confirma a seleção e volta ao roteiro com estado 2 (navy)
+- Cada card de resultado exibe:
+  - Nome, endereço/bairro, tipo de hospedagem
+  - Avaliação + total de reviews, faixa de preço, badge de distância colorido (verde < 1 km · azul 1–3 km · cinza > 3 km)
+  - Chips de atributos com indicação de confiabilidade: "🏍️ Garagem confirmada" · "⚠️ Garagem não confirmada" · "☕ Café incluso" · "Café não confirmado"
+  - Botões: Selecionar · Ver no Booking (ou Airbnb para Casa/Apto) · Abrir no Maps
+- Ao selecionar: bloco de selecionada aparece no topo com nome, meta e datas — permite marcar como reservado diretamente na tela, antes de voltar ao roteiro
+
+#### Modo Inserir manualmente
+- Campos: Nome (obrigatório) · Endereço · Link da reserva (opcional) · Observações (opcional) · Toggle "Já está reservado"
+- Ao salvar: volta ao roteiro com o Estado 2 (ou Estado 3 se "já reservado" estava marcado)
+- Hospedagem manual se comporta de forma idêntica à automática no card do dia
 
 ### Referência geográfica para busca
 - Se o usuário informou apenas município → Google Geocoding retorna coordenadas do **centro da cidade**
 - Se o usuário informou endereço específico → usa geocode do endereço
 - Raio de busca: 10 km a partir do ponto de referência
 - Avaliação mínima para exibição: 3.8 (menos restritivo que postos — menos opções disponíveis)
+- Geocodificação tentada para entradas manuais com endereço; se falhar, hospedagem é salva sem lat/lng e a navegação usa o endereço textual
                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  

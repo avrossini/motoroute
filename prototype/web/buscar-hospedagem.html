@@ -1,137 +1,557 @@
 <!DOCTYPE html>
-<html lang="pt-BR"><head><meta charset="UTF-8"><link rel="stylesheet" href="../css/web.css"></head>
+<html lang="pt-BR"><head><meta charset="UTF-8"><link rel="stylesheet" href="../css/web.css">
+<style>
+/* Tab switcher no painel esquerdo */
+.panel-tabs{display:flex;background:#f0f0f0;border-radius:10px;padding:3px;margin-bottom:16px}
+.panel-tab{flex:1;padding:7px;border:none;background:none;border-radius:8px;font-size:12px;font-weight:700;color:#888;cursor:pointer;text-align:center}
+.panel-tab.active{background:#fff;color:#1A1A1A;box-shadow:0 1px 4px rgba(0,0,0,.1)}
+
+/* Context info */
+.ctx-strip{background:#1A1A1A;border-radius:10px;padding:10px 14px;display:flex;gap:0;margin-bottom:14px}
+.ctx-col{flex:1;text-align:center}
+.ctx-col+.ctx-col{border-left:1px solid #333}
+.ctx-lbl{font-size:9px;color:#888;text-transform:uppercase;letter-spacing:.8px}
+.ctx-val{font-size:12px;font-weight:700;color:#fff;margin-top:2px}
+
+/* Guests control */
+.guests-ctrl{display:flex;align-items:center;gap:8px}
+.g-btn{width:26px;height:26px;border-radius:13px;background:#f0f0f0;border:none;font-size:16px;cursor:pointer;display:flex;align-items:center;justify-content:center;color:#1A1A1A;font-weight:700;line-height:1}
+.g-val{font-size:14px;font-weight:700;color:#1A1A1A;min-width:20px;text-align:center}
+
+/* Preference chips */
+.pref-chips{display:flex;gap:5px;flex-wrap:wrap;margin-top:5px}
+.pref-chip{padding:4px 10px;border-radius:20px;font-size:11px;font-weight:700;border:1.5px solid #e5e5e5;background:#fff;color:#555;cursor:pointer}
+.pref-chip.active{background:#1A1A1A;color:#fff;border-color:#1A1A1A}
+
+/* Selected block */
+.sel-block{border-radius:10px;padding:13px 14px;margin-bottom:14px;border:2px solid transparent}
+.sel-block.is-selected{background:#EFF6FF;border-color:#BFDBFE}
+.sel-block.is-reserved{background:#F0FDF4;border-color:#BBF7D0}
+.sel-badge{font-size:10px;font-weight:700;padding:3px 8px;border-radius:20px;margin-bottom:5px;display:inline-block}
+.sel-badge.selected{background:#BFDBFE;color:#1E40AF}
+.sel-badge.reserved{background:#BBF7D0;color:#166534}
+.sel-name{font-size:14px;font-weight:700;color:#1A1A1A;margin-bottom:2px}
+.sel-meta{font-size:11px;color:#888;margin-bottom:2px}
+.sel-dates{font-size:11px;color:#555;margin-bottom:10px}
+.sel-actions{display:flex;gap:6px}
+.sel-btn{border:none;border-radius:8px;padding:7px 10px;font-size:11px;font-weight:700;cursor:pointer}
+.sel-btn.reserve{background:#16A34A;color:#fff;flex:1}
+.sel-btn.reserved-done{background:#BBF7D0;color:#166534;flex:1}
+.sel-btn.swap{background:#f0f0f0;color:#555}
+.sel-btn.ext{background:#003580;color:#fff}
+
+/* Result cards — web (lista vertical rica) */
+.results-list{display:flex;flex-direction:column;gap:12px}
+.result-card{background:#fff;border-radius:12px;box-shadow:0 1px 4px rgba(0,0,0,.06);overflow:hidden;border:2px solid transparent;transition:border-color .15s}
+.result-card:hover{border-color:#e5e5e5}
+.result-card.is-selected{border-color:#BFDBFE;background:#FAFEFF}
+.result-card.is-reserved{border-color:#BBF7D0;background:#FAFFFC}
+.rc-body{display:flex;align-items:flex-start;gap:14px;padding:14px 16px 10px}
+.rc-icon{width:44px;height:44px;border-radius:12px;background:#f5f5f5;display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0}
+.rc-info{flex:1;min-width:0}
+.rc-name{font-size:14px;font-weight:700;color:#1A1A1A;margin-bottom:2px}
+.rc-addr{font-size:11px;color:#888;margin-bottom:6px}
+.rc-stats{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.rstat{font-size:12px;font-weight:600}
+.rstat.rating{color:#C97826}
+.rstat.reviews{color:#aaa;font-weight:400}
+.rstat.price{color:#16A34A}
+.rstat.type{color:#888}
+.rsep{color:#e5e5e5;font-size:10px}
+.rc-right{display:flex;flex-direction:column;align-items:flex-end;gap:6px;flex-shrink:0}
+.dist-badge{font-size:10px;font-weight:700;padding:4px 9px;border-radius:20px;white-space:nowrap}
+.dist-badge.near{color:#16A34A;background:#F0FDF4}
+.dist-badge.mid{color:#2563EB;background:#EFF6FF}
+.dist-badge.far{color:#888;background:#f0f0f0}
+.rc-chips{display:flex;gap:5px;padding:4px 16px 10px;flex-wrap:wrap}
+.rchip{font-size:10px;font-weight:700;padding:3px 8px;border-radius:20px}
+.rchip.g-ok{background:#F0FDF4;color:#16A34A}
+.rchip.g-no{background:#FEF9C3;color:#92400E}
+.rchip.c-ok{background:#FFF7ED;color:#C2410C}
+.rchip.c-no{background:#f5f5f5;color:#888}
+.rchip.moto{background:#EFF6FF;color:#1D4ED8}
+.rc-actions{display:flex;gap:6px;padding:0 16px 12px}
+.rc-btn{border:none;border-radius:8px;padding:7px 12px;font-size:11px;font-weight:700;cursor:pointer}
+.rc-btn.select{background:#1A1A1A;color:#fff}
+.rc-btn.selected-done{background:#f0f0f0;color:#888}
+.rc-btn.booking{background:#003580;color:#fff}
+.rc-btn.airbnb{background:#e84393;color:#fff}
+.rc-btn.maps{background:#f5f5f5;color:#555}
+
+/* Manual form */
+.manual-success{background:#F0FDF4;border:1.5px solid #BBF7D0;border-radius:10px;padding:12px 14px;margin-bottom:14px;display:none}
+.manual-success-title{font-size:13px;font-weight:700;color:#166534}
+.manual-success-sub{font-size:11px;color:#16A34A;margin-top:2px}
+</style>
+</head>
 <body>
 <div class="app">
   <aside class="sidebar">
     <div class="sidebar-logo"><div class="sidebar-logo-name">Moto<span>Route</span></div><div class="sidebar-logo-sub">PLANNER WEB</div></div>
-    <nav class="sidebar-nav"><div class="sidebar-section">Autenticação</div><a class="sidebar-item" href="login.html">🔑 Login</a><div class="sidebar-section">Planejamento</div><a class="sidebar-item" href="dashboard.html">🏠 Dashboard</a><a class="sidebar-item" href="nova-viagem.html">＋ Nova Viagem</a><a class="sidebar-item active" href="roteiro.html">🗺️ Roteiro</a><a class="sidebar-item" href="salvos.html">💾 Roteiros Salvos</a><a class="sidebar-item" href="realizadas.html">🏁 Viagens Realizadas</a><div class="sidebar-section">Perfil</div><a class="sidebar-item" href="perfil.html">👤 Perfil</a><a class="sidebar-item" href="minha-moto.html">🏍️ Minha Moto</a><a class="sidebar-item" href="favoritas.html">⭐ Favoritas</a><a class="sidebar-item" href="preferencias.html">⚙️ Preferências</a></nav>
+    <nav class="sidebar-nav">
+      <div class="sidebar-section">Autenticação</div>
+      <a class="sidebar-item" href="login.html">🔑 Login</a>
+      <div class="sidebar-section">Planejamento</div>
+      <a class="sidebar-item" href="dashboard.html">🏠 Dashboard</a>
+      <a class="sidebar-item" href="nova-viagem.html">＋ Nova Viagem</a>
+      <a class="sidebar-item active" href="roteiro.html">🗺️ Roteiro</a>
+      <a class="sidebar-item" href="salvos.html">💾 Roteiros Salvos</a>
+      <a class="sidebar-item" href="realizadas.html">🏁 Viagens Realizadas</a>
+      <div class="sidebar-section">Perfil</div>
+      <a class="sidebar-item" href="perfil.html">👤 Perfil</a>
+      <a class="sidebar-item" href="minha-moto.html">🏍️ Minha Moto</a>
+      <a class="sidebar-item" href="favoritas.html">⭐ Favoritas</a>
+      <a class="sidebar-item" href="preferencias.html">⚙️ Preferências</a>
+    </nav>
     <div class="sidebar-bottom"><div class="sidebar-user"><div class="sidebar-avatar">A</div><div><div class="sidebar-user-name">André R.</div><div class="sidebar-user-role">Moto: CB 500F</div></div></div></div>
   </aside>
-  <div class="main">
-    <div class="topbar"><div>
-  <div class="topbar-title">Buscar Hospedagem — Dia 1</div>
-  <div class="topbar-sub">Serra da Mantiqueira · pernoite em Pindamonhangaba</div>
-</div>
-<div class="topbar-spacer"></div>
-<button class="topbar-btn secondary" onclick="window.location='roteiro.html'">← Voltar ao roteiro</button></div>
-    <div class="content"><div style="display:grid;grid-template-columns:340px 1fr;gap:16px">
-  <!-- Painel de busca -->
-  <div>
-    <div class="form-section">
-      <div class="form-section-title">📍 Local de pernoite</div>
-      <div class="form-field" style="margin-bottom:10px">
-        <label>Cidade ou endereço</label>
-        <input type="text" value="Pindamonhangaba, SP">
-      </div>
-      <div style="background:#EFF6FF;border-radius:9px;padding:9px 12px;font-size:12px;color:#2563EB;margin-bottom:12px">
-        📐 Usando o <strong>centro de Pindamonhangaba</strong> como referência. Para refinar, informe um endereço específico.
-      </div>
-      <div class="form-field" style="margin-bottom:10px">
-        <label>Ordenar por</label>
-        <select><option>Distância do ponto</option><option>Avaliação</option><option>Preço (menor)</option><option>Preço (maior)</option></select>
-      </div>
-      <div class="form-field" style="margin-bottom:12px">
-        <label>Faixa de preço</label>
-        <select><option>Qualquer</option><option>Até R$200/noite</option><option>R$200–400/noite</option><option>Acima de R$400/noite</option></select>
-      </div>
-      <button class="topbar-btn primary" style="width:100%;justify-content:center">🔍 Buscar opções</button>
-    </div>
-    <div class="form-section" style="background:#F0FDF4;border:1px solid #BBF7D0">
-      <div class="form-section-title" style="color:#16A34A">✓ Selecionada</div>
-      <div style="font-size:14px;font-weight:700;color:#1A1A1A">Pousada da Serra</div>
-      <div style="font-size:12px;color:#888;margin-top:3px">★ 4,7 · R$280/noite · 0,4km</div>
-      <div style="display:flex;gap:8px;margin-top:10px">
-        <button style="flex:1;border:none;border-radius:8px;padding:8px;font-size:12px;font-weight:700;background:#16A34A;color:#fff;cursor:pointer">✓ Marcar como reservado</button>
-        <button style="border:none;border-radius:8px;padding:8px 12px;font-size:12px;font-weight:700;background:#f0f0f0;color:#888;cursor:pointer">Trocar</button>
-      </div>
-    </div>
-  </div>
 
-  <!-- Lista de resultados -->
-  <div>
-    <div style="font-size:12px;color:#888;margin-bottom:12px">6 opções encontradas · ordenadas por distância do centro de Pindamonhangaba</div>
-    <div class="data-table"><table>
-      <thead>
-        <tr>
-          <th>Hospedagem</th>
-          <th>Avaliação</th>
-          <th>Reviews</th>
-          <th>Preço/noite</th>
-          <th>Distância</th>
-          <th></th>
-        </tr>
-      </thead>
-      <tbody>
-        <tr style="background:#F0FDF4">
-          <td>
-            <div style="font-size:13px;font-weight:700;color:#1A1A1A">🏡 Pousada da Serra</div>
-            <div style="font-size:11px;color:#888">Rua das Bromélias, 122 · Pousada</div>
-          </td>
-          <td><span style="color:#C97826;font-weight:700">★ 4,7</span></td>
-          <td style="color:#888;font-size:12px">312</td>
-          <td style="font-weight:700;color:#16A34A">R$280</td>
-          <td><span style="background:#F0FDF4;color:#16A34A;font-size:11px;font-weight:700;padding:3px 8px;border-radius:20px">0,4km</span></td>
-          <td><span style="color:#16A34A;font-size:12px;font-weight:700">✓ Selecionada</span></td>
-        </tr>
-        <tr>
-          <td>
-            <div style="font-size:13px;font-weight:700;color:#1A1A1A">🏨 Hotel Mantiqueira Palace</div>
-            <div style="font-size:11px;color:#888">Av. Dr. Gaspar, 480 · Hotel</div>
-          </td>
-          <td><span style="color:#C97826;font-weight:700">★ 4,2</span></td>
-          <td style="color:#888;font-size:12px">88</td>
-          <td style="font-weight:700;color:#1A1A1A">R$220</td>
-          <td><span style="background:#EFF6FF;color:#2563EB;font-size:11px;font-weight:700;padding:3px 8px;border-radius:20px">1,1km</span></td>
-          <td><button style="font-size:11px;font-weight:700;padding:5px 10px;border:none;border-radius:7px;background:#F5E6D0;color:#C97826;cursor:pointer">Selecionar</button></td>
-        </tr>
-        <tr>
-          <td>
-            <div style="font-size:13px;font-weight:700;color:#1A1A1A">🌿 Recanto Verde Pousada</div>
-            <div style="font-size:11px;color:#888">Estrada do Recanto, km 3 · Pousada</div>
-          </td>
-          <td><span style="color:#C97826;font-weight:700">★ 4,9</span></td>
-          <td style="color:#888;font-size:12px">47</td>
-          <td style="font-weight:700;color:#1A1A1A">R$380</td>
-          <td><span style="background:#f0f0f0;color:#888;font-size:11px;font-weight:700;padding:3px 8px;border-radius:20px">3,2km</span></td>
-          <td><button style="font-size:11px;font-weight:700;padding:5px 10px;border:none;border-radius:7px;background:#F5E6D0;color:#C97826;cursor:pointer">Selecionar</button></td>
-        </tr>
-        <tr>
-          <td>
-            <div style="font-size:13px;font-weight:700;color:#1A1A1A">🏨 Ibis Pindamonhangaba</div>
-            <div style="font-size:11px;color:#888">Rod. Pres. Dutra, km 98 · Hotel</div>
-          </td>
-          <td><span style="color:#C97826;font-weight:700">★ 3,9</span></td>
-          <td style="color:#888;font-size:12px">204</td>
-          <td style="font-weight:700;color:#1A1A1A">R$175</td>
-          <td><span style="background:#f0f0f0;color:#888;font-size:11px;font-weight:700;padding:3px 8px;border-radius:20px">4,7km</span></td>
-          <td><button style="font-size:11px;font-weight:700;padding:5px 10px;border:none;border-radius:7px;background:#F5E6D0;color:#C97826;cursor:pointer">Selecionar</button></td>
-        </tr>
-        <tr>
-          <td>
-            <div style="font-size:13px;font-weight:700;color:#1A1A1A">🏡 Chalé Sítio das Flores</div>
-            <div style="font-size:11px;color:#888">Estrada Rural, s/n · Chalé</div>
-          </td>
-          <td><span style="color:#C97826;font-weight:700">★ 4,8</span></td>
-          <td style="color:#888;font-size:12px">23</td>
-          <td style="font-weight:700;color:#1A1A1A">R$450</td>
-          <td><span style="background:#f0f0f0;color:#888;font-size:11px;font-weight:700;padding:3px 8px;border-radius:20px">6,1km</span></td>
-          <td><button style="font-size:11px;font-weight:700;padding:5px 10px;border:none;border-radius:7px;background:#F5E6D0;color:#C97826;cursor:pointer">Selecionar</button></td>
-        </tr>
-        <tr>
-          <td>
-            <div style="font-size:13px;font-weight:700;color:#1A1A1A">🏨 Serra Premium Hotel</div>
-            <div style="font-size:11px;color:#888">Av. Faria Lima, 1200 · Hotel</div>
-          </td>
-          <td><span style="color:#C97826;font-weight:700">★ 4,4</span></td>
-          <td style="color:#888;font-size:12px">156</td>
-          <td style="font-weight:700;color:#1A1A1A">R$340</td>
-          <td><span style="background:#f0f0f0;color:#888;font-size:11px;font-weight:700;padding:3px 8px;border-radius:20px">8,3km</span></td>
-          <td><button style="font-size:11px;font-weight:700;padding:5px 10px;border:none;border-radius:7px;background:#F5E6D0;color:#C97826;cursor:pointer">Selecionar</button></td>
-        </tr>
-      </tbody>
-    </table></div>
-  </div>
-</div></div>
-  </div>
-</div>
-</body></html>                                                                                                                                           
+  <div class="main">
+    <div class="topbar">
+      <div>
+        <div class="topbar-title">Buscar Hospedagem — Dia 1</div>
+        <div class="topbar-sub">Serra da Mantiqueira · pernoite em Pindamonhangaba</div>
+      </div>
+      <div class="topbar-spacer"></div>
+      <button class="topbar-btn secondary" onclick="window.location='roteiro.html'">← Voltar ao roteiro</button>
+    </div>
+
+    <div class="content">
+      <div style="display:grid;grid-template-columns:320px 1fr;gap:16px;align-items:start">
+
+        <!-- ========== PAINEL ESQUERDO ========== -->
+        <div>
+          <!-- Tab switcher -->
+          <div class="form-section" style="padding:16px 16px 14px">
+            <div class="panel-tabs">
+              <button class="panel-tab active" id="tab-buscar" onclick="switchTab('buscar')">🔍 Buscar</button>
+              <button class="panel-tab" id="tab-manual" onclick="switchTab('manual')">✏️ Inserir manualmente</button>
+            </div>
+
+            <!-- ===== BUSCAR PANE ===== -->
+            <div id="pane-buscar">
+              <!-- Contexto -->
+              <div class="ctx-strip">
+                <div class="ctx-col">
+                  <div class="ctx-lbl">Check-in</div>
+                  <div class="ctx-val">19/06/2026</div>
+                </div>
+                <div class="ctx-col">
+                  <div class="ctx-lbl">Checkout</div>
+                  <div class="ctx-val">20/06/2026</div>
+                </div>
+                <div class="ctx-col">
+                  <div class="ctx-lbl">Hóspedes</div>
+                  <div class="ctx-val" id="ctx-guests">1</div>
+                </div>
+              </div>
+
+              <div class="form-field" style="margin-bottom:10px">
+                <label>📍 Local de pernoite</label>
+                <input type="text" value="Pindamonhangaba, SP">
+              </div>
+              <div style="background:#EFF6FF;border-radius:8px;padding:8px 11px;font-size:11px;color:#2563EB;margin-bottom:12px">
+                📐 Usando o <strong>centro de Pindamonhangaba</strong> como referência. Para refinar, informe um endereço específico.
+              </div>
+
+              <!-- Filtros -->
+              <div style="font-size:11px;font-weight:700;color:#555;text-transform:uppercase;letter-spacing:.7px;margin-bottom:10px">Preferências de busca</div>
+
+              <div class="form-field" style="margin-bottom:10px">
+                <label>Tipo de hospedagem</label>
+                <div class="pref-chips">
+                  <button class="pref-chip active" onclick="toggleChip(this)">Qualquer</button>
+                  <button class="pref-chip" onclick="toggleChip(this)">Hotel/Pousada</button>
+                  <button class="pref-chip" onclick="toggleChip(this)">Casa/Apto</button>
+                </div>
+              </div>
+
+              <div class="form-field" style="margin-bottom:10px">
+                <label>Garagem para moto</label>
+                <div class="pref-chips">
+                  <button class="pref-chip active" onclick="toggleChip(this)">Não filtrar</button>
+                  <button class="pref-chip" onclick="toggleChip(this)">Preferencial</button>
+                  <button class="pref-chip" onclick="toggleChip(this)">Obrigatória</button>
+                </div>
+              </div>
+
+              <div class="form-field" style="margin-bottom:10px">
+                <label>Café da manhã</label>
+                <div class="pref-chips">
+                  <button class="pref-chip active" onclick="toggleChip(this)">Não filtrar</button>
+                  <button class="pref-chip" onclick="toggleChip(this)">Preferencial</button>
+                  <button class="pref-chip" onclick="toggleChip(this)">Obrigatório</button>
+                </div>
+              </div>
+
+              <div class="form-field" style="margin-bottom:14px">
+                <label>Hóspedes</label>
+                <div class="guests-ctrl">
+                  <button class="g-btn" onclick="changeGuests(-1)">−</button>
+                  <span class="g-val" id="guests-val">1</span>
+                  <button class="g-btn" onclick="changeGuests(1)">+</button>
+                  <span style="font-size:12px;color:#888">pessoa(s)</span>
+                </div>
+              </div>
+
+              <div class="form-field" style="margin-bottom:14px">
+                <label>Ordenar por</label>
+                <select id="sort-select" onchange="handleSort()">
+                  <option value="dist">Distância do ponto</option>
+                  <option value="rating">Avaliação</option>
+                  <option value="price-asc">Preço (menor)</option>
+                  <option value="price-desc">Preço (maior)</option>
+                </select>
+              </div>
+
+              <button class="topbar-btn primary" style="width:100%;justify-content:center">🔍 Buscar opções</button>
+            </div>
+
+            <!-- ===== MANUAL PANE ===== -->
+            <div id="pane-manual" style="display:none">
+              <div class="manual-success" id="manual-success">
+                <div class="manual-success-title">✓ Hospedagem salva</div>
+                <div class="manual-success-sub" id="manual-success-sub"></div>
+              </div>
+              <div class="form-field" style="margin-bottom:10px">
+                <label>Nome da hospedagem *</label>
+                <input type="text" placeholder="Ex: Pousada Beira Rio" id="m-nome">
+              </div>
+              <div class="form-field" style="margin-bottom:10px">
+                <label>Endereço</label>
+                <input type="text" placeholder="Ex: Rua das Flores, 100 — Pinda, SP" id="m-end">
+              </div>
+              <div class="form-field" style="margin-bottom:10px">
+                <label>Link da reserva <span style="font-weight:400;text-transform:none;color:#aaa">(opcional)</span></label>
+                <input type="url" placeholder="https://booking.com/..." id="m-link" style="border-style:dashed">
+              </div>
+              <div class="form-field" style="margin-bottom:10px">
+                <label>Observações <span style="font-weight:400;text-transform:none;color:#aaa">(opcional)</span></label>
+                <textarea rows="2" placeholder="Ex: Confirmar chegada antes das 22h" id="m-obs" style="border-style:dashed;resize:none"></textarea>
+              </div>
+              <div style="display:flex;align-items:center;gap:8px;padding:10px 12px;background:#f9f9f9;border-radius:8px;margin-bottom:14px">
+                <input type="checkbox" id="m-reservado" style="width:16px;height:16px;accent-color:#C97826;cursor:pointer">
+                <label for="m-reservado" style="font-size:13px;color:#1A1A1A;font-weight:600;cursor:pointer">Já está reservado</label>
+              </div>
+              <div class="form-actions" style="padding-top:0">
+                <button class="btn secondary" onclick="switchTab('buscar')">Cancelar</button>
+                <button class="btn primary" onclick="saveManual()">💾 Salvar hospedagem</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Hospedagem selecionada -->
+          <div class="form-section" id="sel-section" style="display:none;padding:14px 16px">
+            <div class="sel-block is-selected" id="sel-block">
+              <span class="sel-badge selected" id="sel-badge">Selecionada</span>
+              <div class="sel-name" id="sel-name">—</div>
+              <div class="sel-meta" id="sel-meta">—</div>
+              <div class="sel-dates">Check-in 19/06 · Checkout 20/06/2026</div>
+              <div class="sel-actions">
+                <button class="sel-btn reserve" id="sel-reserve-btn" onclick="markReserved()">✓ Marcar como reservado</button>
+                <button class="sel-btn swap" onclick="clearSelection()">Trocar</button>
+                <button class="sel-btn ext">🌐 Ver no Booking</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ========== PAINEL DIREITO: RESULTADOS ========== -->
+        <div>
+          <div style="font-size:12px;color:#888;margin-bottom:14px" id="results-header">
+            6 opções encontradas · ordenadas por distância do centro de Pindamonhangaba
+          </div>
+
+          <div class="results-list" id="results-list">
+
+            <!-- Card 1: Pousada da Serra -->
+            <div class="result-card" id="rc-0">
+              <div class="rc-body">
+                <div class="rc-icon">🏡</div>
+                <div class="rc-info">
+                  <div class="rc-name">Pousada da Serra</div>
+                  <div class="rc-addr">Rua das Bromélias, 122 · Centro · Pindamonhangaba</div>
+                  <div class="rc-stats">
+                    <span class="rstat rating">★ 4,7</span>
+                    <span class="rstat reviews">(312 aval.)</span>
+                    <span class="rsep">|</span>
+                    <span class="rstat price">R$280/noite</span>
+                    <span class="rsep">|</span>
+                    <span class="rstat type">Pousada</span>
+                  </div>
+                </div>
+                <div class="rc-right">
+                  <span class="dist-badge near">0,4km</span>
+                </div>
+              </div>
+              <div class="rc-chips">
+                <span class="rchip g-ok">🏍️ Garagem confirmada</span>
+                <span class="rchip c-ok">☕ Café incluso</span>
+              </div>
+              <div class="rc-actions">
+                <button class="rc-btn select" id="rc-btn-0" onclick="selectLodging(0,'Pousada da Serra','★ 4,7 · R$280/noite · Pousada')">✓ Selecionar</button>
+                <button class="rc-btn booking">Ver no Booking</button>
+                <button class="rc-btn maps">📍 Abrir no Maps</button>
+              </div>
+            </div>
+
+            <!-- Card 2: Apartamento Centro Pinda -->
+            <div class="result-card" id="rc-1">
+              <div class="rc-body">
+                <div class="rc-icon">🏠</div>
+                <div class="rc-info">
+                  <div class="rc-name">Apartamento Centro Pinda</div>
+                  <div class="rc-addr">R. Sete de Setembro, 45 · Centro · Pindamonhangaba</div>
+                  <div class="rc-stats">
+                    <span class="rstat rating">★ 4,1</span>
+                    <span class="rstat reviews">(67 aval.)</span>
+                    <span class="rsep">|</span>
+                    <span class="rstat price">R$190/noite</span>
+                    <span class="rsep">|</span>
+                    <span class="rstat type">Casa/Apto</span>
+                  </div>
+                </div>
+                <div class="rc-right">
+                  <span class="dist-badge mid">0,8km</span>
+                </div>
+              </div>
+              <div class="rc-chips">
+                <span class="rchip g-no">⚠️ Garagem não confirmada</span>
+                <span class="rchip c-no">Café não confirmado</span>
+              </div>
+              <div class="rc-actions">
+                <button class="rc-btn select" id="rc-btn-1" onclick="selectLodging(1,'Apartamento Centro Pinda','★ 4,1 · R$190/noite · Casa/Apto')">✓ Selecionar</button>
+                <button class="rc-btn airbnb">Buscar no Airbnb</button>
+                <button class="rc-btn maps">📍 Abrir no Maps</button>
+              </div>
+            </div>
+
+            <!-- Card 3: Hotel Mantiqueira Palace -->
+            <div class="result-card" id="rc-2">
+              <div class="rc-body">
+                <div class="rc-icon">🏨</div>
+                <div class="rc-info">
+                  <div class="rc-name">Hotel Mantiqueira Palace</div>
+                  <div class="rc-addr">Av. Dr. Gaspar, 480 · Centro · Pindamonhangaba</div>
+                  <div class="rc-stats">
+                    <span class="rstat rating">★ 4,2</span>
+                    <span class="rstat reviews">(88 aval.)</span>
+                    <span class="rsep">|</span>
+                    <span class="rstat price">R$220/noite</span>
+                    <span class="rsep">|</span>
+                    <span class="rstat type">Hotel</span>
+                  </div>
+                </div>
+                <div class="rc-right">
+                  <span class="dist-badge mid">1,1km</span>
+                </div>
+              </div>
+              <div class="rc-chips">
+                <span class="rchip g-no">⚠️ Garagem não confirmada</span>
+                <span class="rchip c-no">Café não confirmado</span>
+              </div>
+              <div class="rc-actions">
+                <button class="rc-btn select" id="rc-btn-2" onclick="selectLodging(2,'Hotel Mantiqueira Palace','★ 4,2 · R$220/noite · Hotel')">✓ Selecionar</button>
+                <button class="rc-btn booking">Ver no Booking</button>
+                <button class="rc-btn maps">📍 Abrir no Maps</button>
+              </div>
+            </div>
+
+            <!-- Card 4: Recanto Verde Pousada -->
+            <div class="result-card" id="rc-3">
+              <div class="rc-body">
+                <div class="rc-icon">🌿</div>
+                <div class="rc-info">
+                  <div class="rc-name">Recanto Verde Pousada</div>
+                  <div class="rc-addr">Estrada do Recanto, km 3 · Pindamonhangaba</div>
+                  <div class="rc-stats">
+                    <span class="rstat rating">★ 4,9</span>
+                    <span class="rstat reviews">(47 aval.)</span>
+                    <span class="rsep">|</span>
+                    <span class="rstat price">R$380/noite</span>
+                    <span class="rsep">|</span>
+                    <span class="rstat type">Pousada</span>
+                  </div>
+                </div>
+                <div class="rc-right">
+                  <span class="dist-badge far">3,2km</span>
+                </div>
+              </div>
+              <div class="rc-chips">
+                <span class="rchip g-ok">🏍️ Garagem confirmada</span>
+                <span class="rchip c-ok">☕ Café incluso</span>
+              </div>
+              <div class="rc-actions">
+                <button class="rc-btn select" id="rc-btn-3" onclick="selectLodging(3,'Recanto Verde Pousada','★ 4,9 · R$380/noite · Pousada')">✓ Selecionar</button>
+                <button class="rc-btn booking">Ver no Booking</button>
+                <button class="rc-btn maps">📍 Abrir no Maps</button>
+              </div>
+            </div>
+
+            <!-- Card 5: Ibis Pindamonhangaba -->
+            <div class="result-card" id="rc-4">
+              <div class="rc-body">
+                <div class="rc-icon">🏨</div>
+                <div class="rc-info">
+                  <div class="rc-name">Ibis Pindamonhangaba</div>
+                  <div class="rc-addr">Rod. Presidente Dutra, km 98 · Pindamonhangaba</div>
+                  <div class="rc-stats">
+                    <span class="rstat rating">★ 3,9</span>
+                    <span class="rstat reviews">(204 aval.)</span>
+                    <span class="rsep">|</span>
+                    <span class="rstat price">R$175/noite</span>
+                    <span class="rsep">|</span>
+                    <span class="rstat type">Hotel</span>
+                  </div>
+                </div>
+                <div class="rc-right">
+                  <span class="dist-badge far">4,7km</span>
+                </div>
+              </div>
+              <div class="rc-chips">
+                <span class="rchip g-ok">🏍️ Garagem confirmada</span>
+                <span class="rchip c-no">Café não confirmado</span>
+              </div>
+              <div class="rc-actions">
+                <button class="rc-btn select" id="rc-btn-4" onclick="selectLodging(4,'Ibis Pindamonhangaba','★ 3,9 · R$175/noite · Hotel')">✓ Selecionar</button>
+                <button class="rc-btn booking">Ver no Booking</button>
+                <button class="rc-btn maps">📍 Abrir no Maps</button>
+              </div>
+            </div>
+
+            <!-- Card 6: Chalé Sítio das Flores -->
+            <div class="result-card" id="rc-5">
+              <div class="rc-body">
+                <div class="rc-icon">🌸</div>
+                <div class="rc-info">
+                  <div class="rc-name">Chalé Sítio das Flores</div>
+                  <div class="rc-addr">Estrada Rural, s/n · Zona Rural · Pindamonhangaba</div>
+                  <div class="rc-stats">
+                    <span class="rstat rating">★ 4,8</span>
+                    <span class="rstat reviews">(23 aval.)</span>
+                    <span class="rsep">|</span>
+                    <span class="rstat price">R$450/noite</span>
+                    <span class="rsep">|</span>
+                    <span class="rstat type">Chalé</span>
+                  </div>
+                </div>
+                <div class="rc-right">
+                  <span class="dist-badge far">6,1km</span>
+                </div>
+              </div>
+              <div class="rc-chips">
+                <span class="rchip g-ok">🏍️ Garagem confirmada</span>
+                <span class="rchip c-ok">☕ Café incluso</span>
+              </div>
+              <div class="rc-actions">
+                <button class="rc-btn select" id="rc-btn-5" onclick="selectLodging(5,'Chalé Sítio das Flores','★ 4,8 · R$450/noite · Chalé')">✓ Selecionar</button>
+                <button class="rc-btn booking">Ver no Booking</button>
+                <button class="rc-btn maps">📍 Abrir no Maps</button>
+              </div>
+            </div>
+
+          </div><!-- /results-list -->
+        </div><!-- /painel direito -->
+
+      </div>
+    </div><!-- /content -->
+  </div><!-- /main -->
+</div><!-- /app -->
+
+<script>
+var guestCount=1,selectedIdx=-1;
+
+function switchTab(t){
+  document.getElementById('pane-buscar').style.display=t==='buscar'?'':'none';
+  document.getElementById('pane-manual').style.display=t==='manual'?'':'none';
+  document.getElementById('tab-buscar').className='panel-tab'+(t==='buscar'?' active':'');
+  document.getElementById('tab-manual').className='panel-tab'+(t==='manual'?' active':'');
+}
+
+function toggleChip(el){
+  var g=el.parentElement;
+  g.querySelectorAll('.pref-chip').forEach(function(c){c.className='pref-chip';});
+  el.className='pref-chip active';
+}
+
+function changeGuests(d){
+  guestCount=Math.max(1,Math.min(8,guestCount+d));
+  document.getElementById('guests-val').textContent=guestCount;
+  document.getElementById('ctx-guests').textContent=guestCount;
+}
+
+function handleSort(){
+  var sorts={dist:'distância',rating:'avaliação','price-asc':'menor preço','price-desc':'maior preço'};
+  var v=document.getElementById('sort-select').value;
+  document.getElementById('results-header').textContent='6 opções encontradas · ordenadas por '+sorts[v];
+}
+
+function selectLodging(idx,name,meta){
+  // Reset previous card
+  if(selectedIdx>=0){
+    document.getElementById('rc-'+selectedIdx).className='result-card';
+    var prevBtn=document.getElementById('rc-btn-'+selectedIdx);
+    prevBtn.textContent='✓ Selecionar';
+    prevBtn.className='rc-btn select';
+    prevBtn.onclick=function(){selectLodging(idx,name,meta);};
+  }
+  selectedIdx=idx;
+
+  // Highlight card
+  document.getElementById('rc-'+idx).className='result-card is-selected';
+  var btn=document.getElementById('rc-btn-'+idx);
+  btn.textContent='✓ Selecionada';
+  btn.className='rc-btn selected-done';
+
+  // Show selected block
+  document.getElementById('sel-section').style.display='';
+  var block=document.getElementById('sel-block');
+  block.className='sel-block is-selected';
+  document.getElementById('sel-name').textContent=name;
+  document.getElementById('sel-meta').textContent=meta;
+  var badge=document.getElementById('sel-badge');
+  badge.textContent='Selecionada';
+  badge.className='sel-badge selected';
+  var reserveBtn=document.getElementById('sel-reserve-btn');
+  reserveBtn.textContent='✓ Marcar como reservado';
+  reserveBtn.className='sel-btn reserve';
+  reserveBtn.disabled=false;
+}
+
+function markReserved(){
+  if(selectedIdx<0) return;
+  document.getElementById('rc-'+selectedIdx).className='result-card is-reserved';
+  var block=document.getElementById('sel-block');
+  block.className='sel-block is-reserved';
+  var badge=document.getElementById('sel-badge');
+  badge.textContent='Reservada ✓';
+  badge.className='sel-badge reserved';
+  var btn=document.getElementById('sel-reserve-btn');
+  btn.textContent='✓ Reservada';
+  btn.className='sel-btn reserved-done';
+  btn.disabled=true;
+}
+
+function clearSelection(){
+  if(selectedIdx>=0){
+    document.getElementById('rc-'+selectedIdx).className='result-card';
+    var btn=document.getElementById('rc-btn-'+selectedIdx);
+    btn.textContent='✓ Selecionar';
+    btn.className='rc-btn select';
+    var idx=selectedIdx;
+    btn.onclick=function(){selectLodging(idx,document.getElementById('sel-name').textContent,document.getElementById('sel-meta').textContent);};
+  }
+  selectedIdx=-1;
+  document.getElementById('sel-section').style.display='none';
+}
+
+function saveManual(){
+  var nome=document.getElementById('m-nome').value.trim();
+  if(!nome){alert('Informe o nome da hospedagem.');return;}
+  var suc=document.getElementById('manual-success');
+  document.getElementById('manual-success-sub').textContent=nome+' foi adicionada ao roteiro.';
+  suc.style.display='';
+  setTimeout(function(){switchTab('buscar');suc.style.display='none';},1800);
+}
+</script>
+</body></html>

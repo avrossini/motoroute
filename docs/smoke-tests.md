@@ -1,7 +1,7 @@
 # MotoRoute — Smoke Tests (Testes Manuais de Fumaça)
 
 Protocolo de testes para validar o funcionamento do app após cada deploy ou alteração significativa.
-Deve ser executado tanto na **versão web** (`https://motoroute-eosin.vercel.app`) quanto no **APK Android**.
+Deve ser executado tanto na **versão web** (`https://app.motoroute.com.br`) quanto no **APK Android**.
 
 ---
 

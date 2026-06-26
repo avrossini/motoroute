@@ -164,34 +164,56 @@ day_index       integer DEFAULT 1         -- qual dia da viagem este trecho pert
 is_last_of_day  boolean DEFAULT false     -- true = último trecho do dia → destino é a hospedagem
 ```
 
-### `lodging_suggestions` — hospedagem sugerida por dia overnight
+### `lodging_suggestions` — hospedagem planejada por dia overnight
 ```sql
 id              uuid PRIMARY KEY DEFAULT gen_random_uuid()
 trip_id         uuid REFERENCES trips(id) ON DELETE CASCADE
 day_index       integer NOT NULL                     -- qual dia da viagem
-place_id        text NOT NULL                        -- Google Places ID
+source          text NOT NULL DEFAULT 'auto'         -- 'auto' (Google Places) | 'manual' (inserção do usuário)
+place_id        text                                 -- Google Places ID; NULL para entradas manuais
 name            text NOT NULL
+address         text                                 -- endereço textual completo (manual ou da API)
+city            text NOT NULL                        -- usada no deep link de busca externa
 rating          numeric(2,1)
 total_ratings   integer
-price_level     integer                              -- 1 a 4 ($ a $$$$)
-latitude        numeric(10,7) NOT NULL
-longitude       numeric(10,7) NOT NULL
-city            text NOT NULL                        -- usada no deep link do Booking.com
+price_level     integer                              -- 1 a 4 ($ a $$$$); pode ser NULL
+latitude        numeric(10,7)                        -- NULL se geocodificação não foi possível
+longitude       numeric(10,7)                        -- NULL se geocodificação não foi possível
+lodging_type    text                                 -- 'hotel' | 'pousada' | 'chale' | 'casa_apto' | 'outro' | NULL
+guest_count     integer DEFAULT 1                    -- número de hóspedes; usado nos links externos
 checkin_date    date NOT NULL
 checkout_date   date NOT NULL
-is_selected     boolean DEFAULT false                -- hospedagem escolhida pelo usuário
+is_selected     boolean DEFAULT false                -- hospedagem escolhida pelo usuário para o dia
 is_reserved     boolean DEFAULT false                -- usuário marcou manualmente como "reservado"
-reference_lat   numeric(10,7)                        -- lat do ponto de referência usado na busca
-reference_lng   numeric(10,7)                        -- lng do ponto de referência usado na busca
+booking_url     text                                 -- link de reserva informado pelo usuário (manual) ou gerado
+notes           text                                 -- observações livres do usuário
+-- Preferências de busca que geraram este resultado (snapshot no momento da busca)
+parking_requirement  text DEFAULT 'none'            -- 'none' | 'preferred' | 'required'
+breakfast_requirement text DEFAULT 'none'           -- 'none' | 'preferred' | 'required'
+-- Confiabilidade dos atributos
+parking_status  text DEFAULT 'unknown'              -- 'confirmed' | 'inferred' | 'unknown'
+breakfast_status text DEFAULT 'unknown'             -- 'confirmed' | 'inferred' | 'unknown'
+-- Ponto de referência usado na busca
+reference_lat   numeric(10,7)                        -- lat do ponto de referência
+reference_lng   numeric(10,7)                        -- lng do ponto de referência
 reference_label text                                 -- ex: "centro de Pindamonhangaba" ou endereço específico
-distance_m      integer                              -- distância em metros do ponto de referência
+distance_m      integer                              -- distância em metros do ponto de referência; NULL para manual sem lat/lng
 ```
+
+Notas sobre `source` e `place_id`:
+- `source = 'auto'`: hospedagem encontrada via Google Places. `place_id` sempre preenchido.
+- `source = 'manual'`: inserção direta pelo usuário. `place_id` é NULL; `latitude`/`longitude` são preenchidos se geocodificação do endereço teve sucesso.
+- Entradas manuais e automáticas se comportam de forma idêntica no card do dia e nos estados de seleção/reserva.
 
 Notas sobre `reference_lat/lng`:
 - Se o usuário informar apenas o município, o sistema usa as coordenadas do centro da cidade (via Google Geocoding API) como ponto de referência.
 - Se o usuário informar um endereço específico, usa as coordenadas desse endereço.
-- A busca é feita com Google Places API `type=lodging` em raio de 10 km do ponto de referência.
-- Resultados são ordenados por `distance_m` por padrão, com opções de ordenar por rating ou preço.
+- A busca automática é feita com Google Places API `type=lodging` em raio de 10 km do ponto de referência.
+- Resultados são ordenados por `distance_m` por padrão, com opções de ordenar por avaliação, preço ou compatibilidade com preferências.
+
+Notas sobre confiabilidade de atributos:
+- `parking_status` e `breakfast_status` nunca devem ser definidos como `'confirmed'` a partir de dados de API que não confirme o atributo explicitamente.
+- Se o usuário preencher um atributo manualmente, persiste como `'confirmed'`.
 
 RLS padrão aplicado (usuário acessa apenas próprios dados).
 

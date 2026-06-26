@@ -25,6 +25,128 @@ Todas as regras se aplicam igualmente à versão mobile e à versão web.
 **Contexto de criação (viagem nova):**
 - O alerta dispara para o usuário no momento da criação: *"O trecho máximo configurado ({X}km) pode exceder a autonomia estimada da sua moto ({Y}km). Considere reduzir o trecho máximo ou planejar reabastecimentos intermediários."*
 
+## Geração automática de roteiro
+
+### Preservação de origem e destino
+Dentro do cálculo do roteiro, o `origin_name` do primeiro segmento e o `destination_name` do último segmento devem ser exatamente os strings recebidos como parâmetros pela API — nunca substituídos por reverse geocoding. O geocoding de validação da origem/destino ocorre na etapa de criação da viagem (escopo separado) e não é alterado por este fluxo.
+
+### Destino final de cada dia deve ser uma cidade (`multi_day` apenas)
+Para viagens de múltiplos dias, o último segmento de cada dia (`is_last_of_day = true`, exceto o último dia) deve terminar em um ponto que o reverse geocoding identifique como `locality` (cidade). O motociclista precisa de estrutura urbana para pernoite: restaurantes, hotéis, serviços.
+
+- Se o corte natural do algoritmo cair num step endpoint sem `locality` (ex: cruzamento no interior, nome de município esparsamente populado), o algoritmo desliza para o step endpoint mais próximo — antes ou depois — cujo geocoding retorne uma `locality`.
+- O fim de dia não deve ser escolhido apenas por estar próximo da distância matemática ideal. O algoritmo deve preferir cidades com maior probabilidade de infraestrutura para pernoite: hospedagem, alimentação, abastecimento, serviços básicos e segurança/logística.
+- A divisão dos dias **não precisa ser exata em quilometragem**: um dia pode ficar ligeiramente mais longo ou mais curto do que o target se isso for necessário para garantir pernoite em cidade. Infraestrutura urbana tem prioridade sobre precisão de km diário.
+- Esta regra **não se aplica** ao último dia da viagem (cujo destino é o destino final informado pelo usuário) nem a viagens `day_trip`.
+
+### Distância diária recomendada em expedições
+
+A regra de 100–200 km entre paradas controla segurança e autonomia entre abastecimentos. A distância diária total controla cansaço e viabilidade da expedição — são validações independentes, e ambas devem ser verificadas em viagens `multi_day`.
+
+Faixas de referência:
+
+| Ritmo | Distância/dia | Comportamento do app |
+|-------|--------------|----------------------|
+| Tranquilo | até 350 km | Sem alerta |
+| Normal | até 500 km | Sem alerta |
+| Puxado | até 650 km | Alerta informativo |
+| Extremo | acima de 650 km | Alerta forte — expedição potencialmente cansativa ou insegura |
+
+- Esses limites são referências para orientar o usuário, não configurações técnicas fechadas no MVP
+- O app não impede a criação de expedições acima de 650 km/dia — exibe alerta e o usuário decide conscientemente
+
+### Alerta de média diária acima do recomendado
+
+Se `distância_total ÷ número_de_dias` resultar em média acima do limite recomendado, o app exibe alerta informativo antes de confirmar a geração do roteiro.
+
+Exemplo de mensagem:
+> "Esta expedição terá média de 710 km por dia. Para uma viagem de moto, considere adicionar mais dias ou revisar o ritmo."
+
+- O alerta não bloqueia a criação da viagem
+- O app sugere aumentar o número de dias; o usuário pode continuar como planejado
+- O alerta deve ser visível antes da confirmação final, não escondido no detalhe do roteiro
+
+### Validação do fim de dia como ponto de pernoite
+
+O último ponto de cada dia — exceto o destino final da viagem — deve ser validado como ponto adequado de pernoite, não apenas como endpoint de step de rota.
+
+**O algoritmo deve preferir:**
+- Locais cujo reverse geocoding retorne `locality`
+- Pontos com nome legível e reconhecível como cidade
+
+**O algoritmo deve evitar como fim de dia:**
+- Código de coordenada ou ponto técnico sem nome urbano
+- Posto isolado sem estrutura de pernoite
+- Estrada, cruzamento ou área rural
+- Nome pouco legível ou identificador interno de mapa
+
+**Quando não houver cidade ideal exatamente no corte diário:**
+- O algoritmo desliza antes ou depois dentro de uma tolerância razoável, priorizando a cidade mais próxima com estrutura provável
+- O dia pode ficar ligeiramente mais curto ou mais longo — infraestrutura tem prioridade sobre precisão de km
+
+Esta seção é uma extensão da regra `### Destino final de cada dia deve ser uma cidade` e aplica-se em conjunto com ela.
+
+### Nomes legíveis no roteiro
+
+O roteiro final não deve exibir labels técnicos ou identificadores não humanos como pontos de rota.
+
+**Exemplos de nomes inaceitáveis:**
+- `47CPMX97+26` (Plus Code do Google)
+- Coordenadas cruas: `−15.8234, −47.9291`
+- Identificadores internos ou step index de mapa
+
+**Quando um ponto retornar label técnico:**
+1. O app tenta substituir pelo nome retornado em reverse geocoding — cidade, bairro ou localidade
+2. Se não houver nome confiável, exibir "Local a confirmar" como label do ponto
+3. Nunca tratar um ponto com label técnico como ponto normal sem notificação ao usuário
+
+- Esta regra se aplica a todos os pontos do roteiro: paradas intermediárias, fins de dia e destinos
+- Origem e destino informados pelo usuário são preservados conforme `### Preservação de origem e destino`
+
+### Diferença entre trecho válido e dia viável
+
+Um roteiro pode respeitar a regra de 100–200 km entre paradas em todos os trechos e ainda assim gerar dias inviáveis por acúmulo.
+
+A validação de expedição opera em duas camadas independentes:
+
+1. **Validação de trecho**: cada segmento individual está dentro do mínimo e máximo configurados → controla autonomia e segurança entre abastecimentos
+2. **Validação de dia**: a soma dos trechos do dia não ultrapassa o limite diário recomendado → controla cansaço e viabilidade de continuar a expedição
+
+Ambas as camadas devem ser verificadas. Quando violadas, o resultado de cada camada deve ser exibido separadamente ao usuário — não basta indicar que "a rota está válida".
+
+### Explicabilidade da escolha do fim de dia
+
+Quando o algoritmo escolher uma cidade de pernoite que deixa o dia mais curto ou mais longo do que a divisão matemática, o app pode exibir uma justificativa simples no card do dia.
+
+Exemplos:
+- "Dia encerrado em Paraíso do Tocantins por ter melhor estrutura para pernoite."
+- "Dia ficou mais curto para terminar em cidade com hospedagem provável."
+- "Dia ficou mais longo porque a próxima cidade com estrutura está adiante."
+
+- A justificativa é informativa — não bloqueia nenhuma ação
+- Ajuda o usuário a entender por que os dias podem ter comprimentos diferentes em km
+
+### Alertas de expedição não bloqueiam a viagem
+
+Todas as validações desta seção — distância diária alta, média acima do recomendado, fim de dia sem cidade ideal, nomes técnicos no roteiro — geram alertas informativos, não barreiras técnicas.
+
+- O usuário pode aceitar uma expedição puxada de forma consciente
+- O app deve deixar o risco visível e rastreável no roteiro
+- Bloquear automaticamente é inadequado: ritmo, moto, experiência e condições da estrada variam de pessoa para pessoa
+
+### Estratégia de cálculo por comprimento de rota
+O algoritmo de geração de roteiro usa duas estratégias conforme o número de waypoints intermediários necessários (`round(totalKm / targetKm) - 1`):
+
+**Viagens curtas (≤ 24 waypoints intermediários, ~até 3.750 km com target de 150 km):**
+- Lógica em duas etapas: primeira chamada `getRoute(origin, destination)` para obter os steps → selecionar até 24 step endpoints como waypoints → segunda chamada `getRoute(origin, destination, waypoints)` → legs road-accurate diretamente do Google.
+- Os pontos de parada são garantidamente sobre a estrada real porque o Google roteia através deles.
+- Após geração dos segmentos, aplicar a regra de destino final de dia = cidade.
+
+**Viagens longas (> 24 waypoints intermediários):**
+- Primeira chamada `getRoute(origin, destination)` com cap de 24 waypoints → 25 legs de ~400–500 km cada.
+- Para cada leg que exceder `max_stop_km`: subdividir usando step endpoints da própria leg (todos são coordenadas reais da estrada).
+- Para cada leg que ficar abaixo de `min_stop_km`: mesclar com a leg adjacente.
+- Após subdivisão, aplicar a regra de destino final de dia = cidade.
+
 ## Cálculo de distâncias e tempos
 - **NUNCA** estimar distâncias — sempre usar Google Maps Directions API
 - Velocidade média para cálculo de tempo: **80 km/h** em rodovias
@@ -126,6 +248,7 @@ Qualquer posto com avaliação < 4.0 exibe **⚠ Avaliação baixa — confirme 
 - A viagem se divide em dias, cada um com seu conjunto de trechos
 - O usuário informa o período (data de saída e de retorno) ou o número de dias
 - O app distribui os trechos por dia, respeitando a regra de 100–200 km por trecho
+- Além da regra de trecho, a distribuição deve considerar a **distância diária total** — ver `### Distância diária recomendada em expedições`
 - **O último trecho de cada dia (exceto o último) termina na hospedagem overnight**
 - O ponto de hospedagem é tratado como destino final daquele dia — aparece no card do dia e o botão "Navegar" direciona para ele
 - Paradas obrigatórias definidas pelo usuário têm precedência na distribuição por dia
@@ -134,29 +257,117 @@ Qualquer posto com avaliação < 4.0 exibe **⚠ Avaliação baixa — confirme 
 
 ## Hospedagem (multi-day — incluído no MVP)
 
+A hospedagem é tratada como **pernoite planejado** — não como sugestão de API. O usuário tem três caminhos equivalentes para definir onde vai dormir: busca automática, inserção manual ou registro de uma reserva já existente em serviço externo.
+
 ### Quando e como o usuário define a hospedagem
 - A hospedagem é **opcional** e definida **após a geração do roteiro**, dentro de cada card de dia
 - Não é exigida no fluxo de criação — não pode ser impeditivo para o restante do planejamento
-- O usuário abre o bloco "Pernoite" no fim de cada day card e informa cidade ou endereço
+- O usuário abre o bloco "Pernoite" no fim de cada day card e escolhe entre **buscar** ou **inserir manualmente**
 
 ### Ponto de referência para busca
 - Se o usuário informa apenas o **município**: o sistema usa as coordenadas do **centro da cidade** via Google Geocoding API
 - Se o usuário informa um **endereço específico**: usa as coordenadas desse endereço
 - O app exibe sempre uma nota explícita sobre qual referência está sendo usada: *"Usando o centro de Pindamonhangaba como referência. Para refinar, informe um endereço."*
 
-### Discovery
+### Busca automática
 - Usar **Google Places API** com `type=lodging` em raio de **10 km** do ponto de referência
 - Campos obrigatórios no retorno: `name`, `rating`, `user_ratings_total`, `price_level`, `geometry`, `place_id`
 - Filtrar por avaliação mínima 3.8 (critério menos restritivo que postos — menos opções disponíveis)
-- Exibir por opção: nome, tipo (hotel/pousada/chalé), avaliação com total de reviews, faixa de preço, distância do ponto de referência
-- Ordenação padrão: **distância** — com opções de reordenar por avaliação ou preço
+- Exibir por opção: nome, endereço ou região, tipo aparente (hotel/pousada/chalé/casa), avaliação com total de reviews, faixa de preço quando disponível, distância do ponto de referência, atributos confirmados/não confirmados, ações externas disponíveis
+- Ordenação padrão: **distância** — com opções de reordenar por avaliação, preço ou compatibilidade com preferências
+
+### Inserção manual
+O usuário pode informar uma hospedagem diretamente, sem busca automática. Isso cobre casos como: pousada já conhecida, hospedagem combinada com amigos, reserva feita fora do app.
+
+**Campos mínimos (obrigatórios para salvar):**
+- Nome da hospedagem
+- Endereço ou cidade
+
+**Campos opcionais:**
+- Link da reserva (qualquer URL — Booking, Airbnb, direto)
+- Observações livres (ex: "confirmar chegada antes das 22h")
+- Status "já está reservado" — pré-marca `is_reserved = true`
+
+**Regras:**
+- A hospedagem manual aparece no card do dia exatamente como uma hospedagem encontrada por busca
+- Pode ser marcada como reservada a qualquer momento
+- Se houver endereço, o app tenta geocodificar e salvar lat/lng; se não conseguir, a hospedagem é salva normalmente e a navegação pode usar o endereço textual
+- Não há validação de existência — o app registra o que o usuário informa
+
+### Preferências de busca
+As preferências influenciam ordenação, filtragem e links externos. **Não alteram o roteiro.**
+
+**Local e período vêm do planejamento:**
+- Local: ponto de referência do pernoite (município ou endereço)
+- Check-in: data do dia corrente do pernoite
+- Checkout: dia seguinte
+
+**Parâmetros configuráveis pelo usuário:**
+
+| Parâmetro | Opções |
+|-----------|--------|
+| Tipo de hospedagem | Qualquer · Hotel/Pousada · Casa/Apartamento |
+| Hóspedes | Número inteiro ≥ 1 |
+| Garagem | Não filtrar · Preferencial · Obrigatória |
+| Café da manhã | Não filtrar · Preferencial · Obrigatório |
+
+- "Preferencial" influencia ordenação dos resultados — opções com o atributo confirmado sobem na lista
+- "Obrigatório" alerta quando um resultado não tem o atributo confirmado, mas **não oculta automaticamente** o resultado (pode haver poucas opções)
+- Preferências são passadas nos links externos sempre que o serviço destino suportar os parâmetros
+
+### Confiabilidade dos atributos
+APIs externas não confirmam todos os atributos. Cada atributo exibido deve ser classificado explicitamente:
+
+| Classificação | Significado |
+|---------------|-------------|
+| **Confirmado** | A fonte (API ou o próprio usuário) garantiu o atributo |
+| **Inferido** | Deduzido de contexto (ex: nome sugere "pousada rural") — sem confirmação direta |
+| **Não confirmado** | A fonte retornou o local mas não tem dados sobre aquele atributo |
+
+**Regras:**
+- Garagem e café da manhã **nunca** devem ser exibidos como garantidos se a fonte não confirmar
+- Se o usuário inserir manualmente um atributo (ex: "garagem confirmada"), tratar como **confirmado pelo usuário**
+- Quando um critério marcado como "obrigatório" não puder ser confirmado, exibir alerta visual no resultado — não ocultar
+
+### Casa/Apartamento
+Esse tipo de hospedagem pode não aparecer bem em APIs tradicionais de lugares (`type=lodging` tende a retornar hotéis e pousadas).
+
+- Quando o usuário escolher "Casa/Apartamento" nas preferências, o app prioriza resultados compatíveis quando disponíveis
+- Oferece link externo ("Buscar no Airbnb") como caminho primário para esse tipo
+- A inserção manual é o caminho natural quando não há resultados automáticos adequados
+- **Ausência de resultados automáticos não bloqueia o usuário** — o modo manual permanece sempre disponível
+
+### Renderização dos chips de atributos
+
+Cada card de resultado de hospedagem exibe chips de atributos. O chip de garagem e o chip de café **sempre aparecem** em cada card — ou confirmado ou não confirmado. Nunca omitidos silenciosamente.
+
+| Campo | Valor | Chip exibido | Visual |
+|-------|-------|-------------|--------|
+| `parking_status` | `'confirmed'` | 🏍️ **Garagem confirmada** | Verde |
+| `parking_status` | `'unknown'` ou `'inferred'` | ⚠️ **Garagem não confirmada** | Âmbar |
+| `breakfast_status` | `'confirmed'` | ☕ **Café incluso** | Laranja suave |
+| `breakfast_status` | `'unknown'` ou `'inferred'` | **Café não confirmado** | Cinza |
+
+**Fonte dos valores:**
+- Google Places confirma o atributo explicitamente → `'confirmed'`
+- API retorna o local sem dados sobre o atributo → `'unknown'`
+- Inferido por tipo/nome sem confirmação direta → `'inferred'`
+- Usuário preenche manualmente → `'confirmed'`
+
+**Regras de exibição:**
+- Quando a preferência do usuário for "Obrigatório" e o atributo for `'unknown'` ou `'inferred'`, o chip de "não confirmado" recebe alerta visual adicional (ex: borda destacada), mas o card **não é ocultado**
+- Não existe chip "Bom para moto" — o chip de garagem confirmada cobre o caso de uso principal para motociclistas
 
 ### Reserva — integração via deep link (sem API de parceiro)
-- Ao clicar em "Ver no Booking.com", abrir deep link com cidade + datas pré-preenchidas:
-  - `https://www.booking.com/searchresults.html?ss={cidade}&checkin={YYYY-MM-DD}&checkout={YYYY-MM-DD+1}&group_adults=1`
+O app **não faz reservas**. Apenas abre links externos para que o usuário finalize no serviço escolhido.
+
+- **Booking.com:** `https://www.booking.com/searchresults.html?ss={cidade}&checkin={YYYY-MM-DD}&checkout={YYYY-MM-DD+1}&group_adults={n}`
+- **Airbnb:** link de busca com localidade e datas quando suportado
+- **Google Maps:** abrir local pelo `place_id` ou endereço
+- Sempre que possível, preencher automaticamente nos links: local, check-in, checkout e número de hóspedes
 - **Mobile:** abrir no browser nativo via `Linking.openURL()`
 - **Web:** abrir em nova aba via `window.open()`
-- Não requer chave de API do Booking.com — é uma URL pública de busca
+- O app **não garante** disponibilidade, preço, política de cancelamento, garagem ou café da manhã — qualquer atributo exibido vem de APIs de discovery, não de confirmação de reserva
 
 ### Estados do bloco de pernoite
 
@@ -164,20 +375,31 @@ O bloco de pernoite no fim de cada day card (exceto o último dia) tem 3 estados
 
 | Estado | Visual | Ações disponíveis |
 |--------|--------|-------------------|
-| **Sem hospedagem** | Botão discreto "＋ Adicionar hospedagem" | Abrir busca |
-| **Selecionada** | Fundo azul-escuro · nome, avaliação, preço, distância | Marcar como reservado · Navegar · Booking.com · Trocar |
-| **Reservada** | Fundo verde-escuro · badge "✓ RESERVADO" | Navegar · Booking.com · Desfazer / Trocar |
+| **Sem hospedagem** | Botão discreto "＋ Adicionar hospedagem" | Buscar · Inserir manualmente |
+| **Selecionada** | Fundo azul-escuro · nome, meta, distância | Marcar como reservado · Trocar · Navegar · Abrir link externo |
+| **Reservada** | Fundo verde-escuro · badge "✓ RESERVADO" | Desfazer reserva · Trocar · Navegar · Abrir link externo |
 
 ### Marcador de reserva — comportamento
-- "Marcar como reservado" é uma **ação manual do usuário** — não representa integração com Booking.com ou qualquer plataforma
+- "Marcar como reservado" é uma **ação manual do usuário** — não representa integração com nenhuma plataforma
 - Serve como controle pessoal para rastrear quais pernoites já foram resolvidos
-- Persiste no banco como `is_reserved = true` na tabela `lodging_suggestions`
+- Persiste no banco como `is_reserved = true`
+- Pode ser desfeito — voltando ao estado "Selecionada"
 
 ### Card do dia — viagem de múltiplos dias
 - Cada dia tem um card próprio no roteiro com: data, trechos do dia, km total do dia, horário estimado de saída e chegada
 - O último item do card de cada dia (exceto o último) é a hospedagem overnight
 - A hospedagem aparece como destino navegável — botão "Navegar até a hospedagem" com as mesmas regras de plataforma do botão Navegar padrão
-- O usuário pode trocar a sugestão de hospedagem por outra opção próxima (lista de alternativas)
+- Hospedagens manuais e automáticas se comportam de forma idêntica no card do dia
+- O usuário pode trocar por outra opção a qualquer momento (busca ou manual)
+
+### Modelo de dados mínimo
+Referência para implementação — sem obrigação de mudança imediata no banco enquanto o schema atual suportar.
+
+**Obrigatórios:**
+`trip_id` · `day_index` · `source` (auto | manual) · `name` · `address` · `city` · `checkin_date` · `checkout_date` · `is_selected` · `is_reserved`
+
+**Opcionais:**
+`place_id` · `latitude` · `longitude` · `rating` · `total_ratings` · `price_level` · `booking_url` · `notes` · `lodging_type` · `guest_count` · `parking_requirement` · `breakfast_requirement` · `parking_status` · `breakfast_status` · `reference_lat` · `reference_lng` · `reference_label` · `distance_m`
 
 ## Nome da viagem
 - Campo opcional no passo 1 da criação — se não preenchido, o app gera automaticamente: "{Origem} → {Destino}"
