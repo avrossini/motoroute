@@ -17,6 +17,7 @@ import { Platform } from "react-native";
 import { useState, useCallback, useRef, useEffect } from "react";
 import { useFocusEffect } from "expo-router";
 import { getSupabase } from "@/services/supabase";
+import { openNavigation } from "@/platform/navigation";
 import { generateSegments, type ManualWaypoint } from "@/services/googleDirections";
 import {
   fetchSegmentWeather,
@@ -263,6 +264,7 @@ function SegmentCard({
   departureTime,
   onStopPress,
   onAddPress,
+  onNavigatePress,
 }: {
   seg: Segment;
   stop?: StopSuggestion;
@@ -270,6 +272,7 @@ function SegmentCard({
   departureTime: string;
   onStopPress?: () => void;
   onAddPress?: () => void;
+  onNavigatePress?: () => void;
 }) {
   const alerts: string[] = (seg.alert_types as string[] | null) ?? [];
 
@@ -319,6 +322,11 @@ function SegmentCard({
                 )}
               </View>
               <Text style={styles.segStopAlt}>Ver alt. ›</Text>
+            </TouchableOpacity>
+          )}
+          {onNavigatePress && (
+            <TouchableOpacity style={styles.navigateBtn} onPress={onNavigatePress}>
+              <Text style={styles.navigateBtnText}>Navegar →</Text>
             </TouchableOpacity>
           )}
         </View>
@@ -496,18 +504,21 @@ export default function TripDetailScreen() {
   const [favoriteIds, setFavoriteIds] = useState<Set<string>>(new Set());
   const [favSaving, setFavSaving] = useState<string | null>(null);
   const [removeWpConfirm, setRemoveWpConfirm] = useState<string | null>(null);
+  const [navApp, setNavApp] = useState<'google_maps' | 'waze' | null>(null);
 
   async function load() {
     const supabase = getSupabase();
-    const [{ data: tripData }, { data: segsData }] = await Promise.all([
+    const [{ data: tripData }, { data: segsData }, { data: prefsData }] = await Promise.all([
       supabase.from("trips").select("*").eq("id", id).single(),
       supabase
         .from("segments")
         .select("*")
         .eq("trip_id", id)
         .order("order_index", { ascending: true }),
+      supabase.from("user_preferences").select("default_navigation_app").maybeSingle(),
     ]);
     setTrip(tripData);
+    setNavApp((prefsData?.default_navigation_app as 'google_maps' | 'waze' | null) ?? null);
     const segs = segsData ?? [];
     setSegments(segs);
 
@@ -599,6 +610,52 @@ export default function TripDetailScreen() {
       if (autoCalc === "true" && tripData) calcularRota(undefined, tripData);
     });
   }, [id]));
+
+  function handleNavigate(seg: Segment) {
+    const doNavigate = (app: 'google_maps' | 'waze') => {
+      openNavigation(seg.dest_lat, seg.dest_lng, app);
+    };
+
+    if (navApp) {
+      doNavigate(navApp);
+      return;
+    }
+
+    Alert.alert(
+      "App de navegação",
+      "Qual app você prefere usar para navegar?",
+      [
+        {
+          text: "Google Maps",
+          onPress: async () => {
+            doNavigate('google_maps');
+            await saveNavApp('google_maps');
+            Alert.alert("Dica", "Para alterar o app de navegação, acesse Perfil → Preferências Padrão.");
+          },
+        },
+        {
+          text: "Waze",
+          onPress: async () => {
+            doNavigate('waze');
+            await saveNavApp('waze');
+            Alert.alert("Dica", "Para alterar o app de navegação, acesse Perfil → Preferências Padrão.");
+          },
+        },
+        { text: "Cancelar", style: "cancel" },
+      ]
+    );
+  }
+
+  async function saveNavApp(app: 'google_maps' | 'waze') {
+    setNavApp(app);
+    const supabase = getSupabase();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+    await supabase
+      .from("user_preferences")
+      .update({ default_navigation_app: app })
+      .eq("user_id", user.id);
+  }
 
   async function toggleFavorite(alt: StopAlternative) {
     const supabase = getSupabase();
@@ -1447,6 +1504,7 @@ export default function TripDetailScreen() {
                             setWpQuery("");
                             setWpResults([]);
                           }}
+                          onNavigatePress={() => handleNavigate(seg)}
                         />
                         {wpsAfter.length > 0 && (
                           <View style={styles.wpDivider}>
@@ -2239,6 +2297,11 @@ const styles = StyleSheet.create({
   segStopMeta: { fontSize: 10, color: "#888", marginTop: 1 },
   segStopLowRating: { fontSize: 10, color: "#C97826", marginTop: 2, fontWeight: "600" },
   segStopAlt: { fontSize: 11, fontWeight: "700", color: "#2563EB", flexShrink: 0 },
+  navigateBtn: {
+    marginTop: 10, backgroundColor: "#C97826", borderRadius: 10,
+    paddingVertical: 8, alignItems: "center",
+  },
+  navigateBtnText: { color: "#fff", fontSize: 13, fontWeight: "700" },
 
   // Weather panel — right side (D2, D7)
   weatherPanel: {

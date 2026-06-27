@@ -22,6 +22,7 @@ interface Prefs {
   wind_alert_kmh: number;
   avoid_tolls: boolean;
   notifications_enabled: boolean;
+  default_navigation_app: 'google_maps' | 'waze' | null;
 }
 
 const DEFAULTS: Prefs = {
@@ -34,6 +35,7 @@ const DEFAULTS: Prefs = {
   wind_alert_kmh: 50,
   avoid_tolls: false,
   notifications_enabled: true,
+  default_navigation_app: null,
 };
 
 function StepField({
@@ -99,6 +101,7 @@ export default function PreferenciasScreen() {
         wind_alert_kmh: data.wind_alert_kmh ?? 50,
         avoid_tolls: data.avoid_tolls ?? false,
         notifications_enabled: data.notifications_enabled ?? true,
+        default_navigation_app: (data.default_navigation_app as 'google_maps' | 'waze' | null) ?? null,
       });
     }
     setLoading(false);
@@ -206,6 +209,26 @@ export default function PreferenciasScreen() {
           </View>
         </View>
 
+        <View style={styles.group}>
+          <Text style={styles.groupLabel}>NAVEGAÇÃO</Text>
+          <View style={styles.field}>
+            <Text style={styles.fieldLabel}>App de navegação padrão</Text>
+            <View style={{ flexDirection: "row", gap: 8 }}>
+              {(["google_maps", "waze"] as const).map((app) => (
+                <TouchableOpacity
+                  key={app}
+                  onPress={() => setPrefs((p) => ({ ...p, default_navigation_app: app }))}
+                  style={[styles.navOption, prefs.default_navigation_app === app && styles.navOptionSelected]}
+                >
+                  <Text style={[styles.navOptionText, prefs.default_navigation_app === app && styles.navOptionTextSelected]}>
+                    {app === "google_maps" ? "Google Maps" : "Waze"}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </View>
+        </View>
+
         <TouchableOpacity style={[styles.saveBtn, saving && { opacity: 0.6 }]} onPress={save} disabled={saving}>
           {saving ? <ActivityIndicator color="#fff" size="small" /> : <Text style={styles.saveBtnText}>Salvar preferências</Text>}
         </TouchableOpacity>
@@ -249,4 +272,11 @@ const styles = StyleSheet.create({
     marginHorizontal: 16, marginTop: 28, paddingVertical: 16, alignItems: "center",
   },
   saveBtnText: { color: "#fff", fontSize: 16, fontWeight: "700" },
+  navOption: {
+    paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20,
+    backgroundColor: "#F0F0F0", borderWidth: 1, borderColor: "#E0E0E0",
+  },
+  navOptionSelected: { backgroundColor: "#C97826", borderColor: "#C97826" },
+  navOptionText: { fontSize: 13, fontWeight: "600", color: "#666" },
+  navOptionTextSelected: { color: "#fff" },
 });
