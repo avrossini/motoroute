@@ -1,3 +1,6 @@
+import { logApiUsage } from "@/lib/logApiUsage";
+import { logError } from "@/lib/logError";
+
 const GOOGLE_KEY = process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY ?? "";
 const MAX_RADIUS_KM = 50;
 
@@ -34,6 +37,7 @@ function sortByRating(places: PlaceResult[]): PlaceResult[] {
 }
 
 export async function POST(request: Request): Promise<Response> {
+  const start = Date.now();
   const { lat, lng } = await request.json();
   if (lat == null || lng == null) {
     return Response.json({ error: "lat, lng required" }, { status: 400 });
@@ -46,12 +50,14 @@ export async function POST(request: Request): Promise<Response> {
     // Tier 1 — rating >= 4.0
     const tier1 = sortByRating(nearby5km.filter((p) => p.rating != null && p.rating >= 4.0));
     if (tier1.length > 0) {
+      await logApiUsage(request, { provider: "google", api_type: "places_text", status: "success", duration_ms: Date.now() - start });
       return Response.json({ results: tier1.slice(0, 5), low_rating: false, radius_km: 5 });
     }
 
     // Tier 2 — any rating within 5km
     const tier2 = sortByRating(nearby5km);
     if (tier2.length > 0) {
+      await logApiUsage(request, { provider: "google", api_type: "places_text", status: "success", duration_ms: Date.now() - start });
       return Response.json({ results: tier2.slice(0, 5), low_rating: true, radius_km: 5 });
     }
 
@@ -61,6 +67,7 @@ export async function POST(request: Request): Promise<Response> {
       if (candidates.length > 0) {
         const sorted = sortByRating(candidates);
         const bestRating = sorted[0].rating ?? 0;
+        await logApiUsage(request, { provider: "google", api_type: "places_text", status: "success", duration_ms: Date.now() - start });
         return Response.json({
           results: sorted.slice(0, 5),
           low_rating: bestRating < 4.0,
@@ -69,8 +76,11 @@ export async function POST(request: Request): Promise<Response> {
       }
     }
 
+    await logApiUsage(request, { provider: "google", api_type: "places_text", status: "success", duration_ms: Date.now() - start });
     return Response.json({ results: [], low_rating: false, radius_km: MAX_RADIUS_KM });
   } catch (err: any) {
+    await logError(request, { endpoint: "places-stop", error: err, context: { lat, lng } });
+    await logApiUsage(request, { provider: "google", api_type: "places_text", status: "error", duration_ms: Date.now() - start });
     return Response.json({ error: err.message ?? "unknown" }, { status: 422 });
   }
 }

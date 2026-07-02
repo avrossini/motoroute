@@ -1,3 +1,6 @@
+import { logApiUsage } from "@/lib/logApiUsage";
+import { logError } from "@/lib/logError";
+
 const GOOGLE_KEY = process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY ?? "";
 
 async function geocodeAddress(address: string): Promise<{ lat: number; lng: number; label: string } | null> {
@@ -18,6 +21,7 @@ function inferLodgingType(types: string[]): string {
 }
 
 export async function POST(request: Request): Promise<Response> {
+  const start = Date.now();
   const { city, lat, lng } = await request.json();
 
   let refLat: number = lat;
@@ -27,6 +31,7 @@ export async function POST(request: Request): Promise<Response> {
   if ((refLat == null || refLng == null) && city) {
     const geo = await geocodeAddress(city);
     if (!geo) {
+      await logApiUsage(request, { provider: "google", api_type: "places_text", status: "error", duration_ms: Date.now() - start });
       return Response.json({ error: "Não foi possível geocodificar a cidade" }, { status: 422 });
     }
     refLat = geo.lat;
@@ -35,10 +40,18 @@ export async function POST(request: Request): Promise<Response> {
   }
 
   const url = `https://maps.googleapis.com/maps/api/place/nearbysearch/json?location=${refLat},${refLng}&radius=10000&type=lodging&language=pt-BR&key=${GOOGLE_KEY}`;
-  const res = await fetch(url);
-  const json = await res.json();
+  let res: Response, json: any;
+  try {
+    res = await fetch(url);
+    json = await res.json();
+  } catch (e) {
+    await logError(request, { endpoint: "places-lodging", error: e, context: { city, lat, lng } });
+    await logApiUsage(request, { provider: "google", api_type: "places_text", status: "error", duration_ms: Date.now() - start });
+    return Response.json({ error: "Places fetch failed" }, { status: 502 });
+  }
 
   if (json.status !== "OK" && json.status !== "ZERO_RESULTS") {
+    await logApiUsage(request, { provider: "google", api_type: "places_text", status: "error", duration_ms: Date.now() - start });
     return Response.json({ error: json.status }, { status: 422 });
   }
 
@@ -71,5 +84,6 @@ export async function POST(request: Request): Promise<Response> {
     })
     .sort((a: any, b: any) => a.distance_m - b.distance_m);
 
+  await logApiUsage(request, { provider: "google", api_type: "places_text", status: "success", duration_ms: Date.now() - start });
   return Response.json({ results, ref_lat: refLat, ref_lng: refLng, ref_label: refLabel });
 }
