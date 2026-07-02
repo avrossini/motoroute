@@ -10,32 +10,42 @@ import {
   Platform,
 } from "react-native";
 import { router } from "expo-router";
-import { getSupabase } from "@/services/supabase";
 
-export default function LoginScreen() {
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
+export default function InviteCodeScreen() {
+  const [code, setCode] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  async function handleLogin() {
-    if (!email || !password) {
-      setError("Preencha e-mail e senha.");
+  async function handleValidate() {
+    const trimmed = code.trim().toUpperCase();
+    if (!trimmed) {
+      setError("Digite seu código de convite.");
       return;
     }
     setLoading(true);
     setError(null);
 
-    const { error: authError } = await getSupabase().auth.signInWithPassword({
-      email,
-      password,
-    });
+    try {
+      const res = await fetch(`/api/invites/validate/${trimmed}`);
+      const data = await res.json();
 
-    setLoading(false);
-    if (authError) {
-      setError("E-mail ou senha incorretos.");
-    } else {
-      router.replace("/(tabs)/");
+      if (!res.ok) {
+        setError(data.error ?? "Código inválido.");
+        return;
+      }
+
+      const params = new URLSearchParams({
+        code: trimmed,
+        inviteId: data.inviteId,
+        cohort: data.cohort,
+      });
+      if (data.email) params.set("email", data.email);
+
+      router.push(`/(auth)/signup?${params.toString()}`);
+    } catch {
+      setError("Erro ao validar código. Tente novamente.");
+    } finally {
+      setLoading(false);
     }
   }
 
@@ -46,48 +56,42 @@ export default function LoginScreen() {
     >
       <View style={styles.header}>
         <Text style={styles.logo}>MotoRoute</Text>
-        <Text style={styles.subtitle}>Planejamento de viagens de moto</Text>
+        <Text style={styles.subtitle}>Código de convite</Text>
       </View>
 
       <View style={styles.form}>
+        <Text style={styles.description}>
+          O MotoRoute está em alfa fechado. Digite seu código de convite para criar uma conta.
+        </Text>
+
         {error && <Text style={styles.errorText}>{error}</Text>}
 
         <TextInput
           style={styles.input}
-          placeholder="E-mail"
+          placeholder="Ex: ABC12345"
           placeholderTextColor="#999"
-          autoCapitalize="none"
-          keyboardType="email-address"
-          value={email}
-          onChangeText={setEmail}
-        />
-        <TextInput
-          style={styles.input}
-          placeholder="Senha"
-          placeholderTextColor="#999"
-          secureTextEntry
-          value={password}
-          onChangeText={setPassword}
+          autoCapitalize="characters"
+          autoCorrect={false}
+          value={code}
+          onChangeText={setCode}
+          maxLength={8}
+          editable={!loading}
         />
 
         <TouchableOpacity
-          style={styles.btnPrimary}
-          onPress={handleLogin}
-          disabled={loading}
+          style={[styles.btnPrimary, (!code.trim() || loading) && styles.btnDisabled]}
+          onPress={handleValidate}
+          disabled={!code.trim() || loading}
         >
           {loading ? (
             <ActivityIndicator color="#fff" />
           ) : (
-            <Text style={styles.btnPrimaryText}>Entrar</Text>
+            <Text style={styles.btnPrimaryText}>Validar código</Text>
           )}
         </TouchableOpacity>
 
-        <TouchableOpacity onPress={() => router.push("/(auth)/forgot-password")} disabled={loading}>
-          <Text style={styles.linkText}>Esqueceu a senha?</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity onPress={() => router.push("/(auth)/invite-code")} disabled={loading}>
-          <Text style={styles.linkText}>Não tem conta? Cadastre-se</Text>
+        <TouchableOpacity onPress={() => router.back()} disabled={loading}>
+          <Text style={styles.linkText}>Voltar ao login</Text>
         </TouchableOpacity>
       </View>
     </KeyboardAvoidingView>
@@ -119,14 +123,23 @@ const styles = StyleSheet.create({
   form: {
     gap: 12,
   },
+  description: {
+    color: "#999",
+    fontSize: 14,
+    textAlign: "center",
+    lineHeight: 20,
+  },
   input: {
     backgroundColor: "#2A2A2A",
     borderRadius: 12,
     padding: 16,
-    fontSize: 16,
+    fontSize: 22,
     color: "#fff",
     borderWidth: 1,
     borderColor: "#333",
+    textAlign: "center",
+    letterSpacing: 4,
+    fontWeight: "700",
   },
   btnPrimary: {
     backgroundColor: "#C97826",
@@ -134,6 +147,9 @@ const styles = StyleSheet.create({
     padding: 18,
     alignItems: "center",
     marginTop: 8,
+  },
+  btnDisabled: {
+    backgroundColor: "#5A4010",
   },
   btnPrimaryText: {
     color: "#fff",

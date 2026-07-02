@@ -1,6 +1,9 @@
+import { logApiUsage } from "@/lib/logApiUsage";
+
 const GOOGLE_KEY = process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY ?? "";
 
 export async function GET(request: Request): Promise<Response> {
+  const start = Date.now();
   const url = new URL(request.url);
   const oLat = url.searchParams.get("origin_lat");
   const oLng = url.searchParams.get("origin_lng");
@@ -16,9 +19,11 @@ export async function GET(request: Request): Promise<Response> {
   const json = await res.json();
 
   if (json.status !== "OK") {
+    await logApiUsage(request, { provider: "google", api_type: "directions", status: "error", duration_ms: Date.now() - start });
     return Response.json({ error: json.status }, { status: 422 });
   }
 
+  await logApiUsage(request, { provider: "google", api_type: "directions", status: "success", duration_ms: Date.now() - start });
   const leg = json.routes[0]?.legs[0];
   const distance_km: number = (leg?.distance?.value ?? 0) / 1000;
   const duration_min: number = Math.round((leg?.duration?.value ?? 0) / 60);

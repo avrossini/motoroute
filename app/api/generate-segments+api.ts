@@ -1,3 +1,6 @@
+import { logApiUsage } from "@/lib/logApiUsage";
+import { logError } from "@/lib/logError";
+
 const GOOGLE_KEY = process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY ?? "";
 
 interface LatLng { lat: number; lng: number }
@@ -267,6 +270,7 @@ async function snapToCity(
 }
 
 export async function POST(request: Request): Promise<Response> {
+  const start = Date.now();
   const { origin, destination, minStopKm, maxStopKm, numDays, manualWaypoints, trip_type } = await request.json();
 
   if (!origin || !destination) {
@@ -280,6 +284,7 @@ export async function POST(request: Request): Promise<Response> {
     const wps: LatLng[] = manualWaypoints.map((w: any) => ({ lat: w.lat, lng: w.lng }));
     const wpRoute = await getRoute(origin, destination, wps);
     if (wpRoute.status !== "OK") {
+      await logApiUsage(request, { provider: "google", api_type: "generate_segments", status: "error", duration_ms: Date.now() - start });
       return Response.json({ error: `Directions API: ${wpRoute.status}` }, { status: 422 });
     }
     const route = wpRoute.routes[0];
@@ -319,6 +324,7 @@ export async function POST(request: Request): Promise<Response> {
 
     const avg_daily_km = isMultiDay && numDays > 1 ? Math.round(totalKm / numDays) : null;
 
+    await logApiUsage(request, { provider: "google", api_type: "generate_segments", status: "success", duration_ms: Date.now() - start });
     return Response.json({
       segments,
       total_km: Math.round(totalKm),
@@ -330,6 +336,8 @@ export async function POST(request: Request): Promise<Response> {
   // ── Step 1: get full route ─────────────────────────────────────────────────
   const fullRoute = await getRoute(origin, destination);
   if (fullRoute.status !== "OK") {
+    await logError(request, { endpoint: "generate-segments", error: new Error(fullRoute.status), context: { step: "fullRoute", origin, destination } });
+    await logApiUsage(request, { provider: "google", api_type: "generate_segments", status: "error", duration_ms: Date.now() - start });
     return Response.json({ error: `Directions API: ${fullRoute.status}` }, { status: 422 });
   }
 
@@ -342,6 +350,7 @@ export async function POST(request: Request): Promise<Response> {
   // Single-segment route
   if (totalKm <= maxStopKm) {
     const alerts = totalKm < minStopKm ? ["trecho_curto"] : [];
+    await logApiUsage(request, { provider: "google", api_type: "generate_segments", status: "success", duration_ms: Date.now() - start });
     return Response.json({
       segments: [{
         order_index: 0, day_index: 1, is_last_of_day: true,
@@ -390,6 +399,8 @@ export async function POST(request: Request): Promise<Response> {
   const wpsForApi: LatLng[] = pickedWaypoints.map((w) => ({ lat: w.lat, lng: w.lng }));
   const route2 = await getRoute(origin, destination, wpsForApi);
   if (route2.status !== "OK") {
+    await logError(request, { endpoint: "generate-segments", error: new Error(route2.status), context: { step: "route2", origin, destination } });
+    await logApiUsage(request, { provider: "google", api_type: "generate_segments", status: "error", duration_ms: Date.now() - start });
     return Response.json({ error: `Directions API (waypoints): ${route2.status}` }, { status: 422 });
   }
 
@@ -515,6 +526,7 @@ export async function POST(request: Request): Promise<Response> {
 
   const avg_daily_km = isMultiDay && numDays > 1 ? Math.round(totalKm / numDays) : null;
 
+  await logApiUsage(request, { provider: "google", api_type: "generate_segments", status: "success", duration_ms: Date.now() - start });
   return Response.json({
     segments,
     total_km: Math.round(totalKm),

@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="pt-BR"><head><meta charset="UTF-8"><meta name="viewport" content="width=375"><link rel="stylesheet" href="../css/mobile.css"></head>
+<body>
+  <div class="status-bar light">
+    <div class="notch"></div>
+    <span>9:41</span>
+    <div class="status-icons"><span>●●●</span><span>WiFi</span><span>🔋</span></div>
+  </div>
+  <div class="screen-content">
+    <div class="roteiro-header">
+      <div style="font-size:12px;color:var(--orange);font-weight:600;margin-bottom:6px;cursor:pointer" onclick="window.parent.goto('home')">← Início</div>
+      <div class="roteiro-title">Feedback</div>
+      <div class="roteiro-meta">Alfa MotoRoute · sua opinião melhora o produto</div>
+    </div>
+
+    <div class="section-label">TIPO</div>
+    <div class="chip-group" id="tipo-chips">
+      <div class="chip active" onclick="selectTipo('bug')">🐛 Bug</div>
+      <div class="chip inactive" onclick="selectTipo('sugestao')">💡 Sugestão</div>
+      <div class="chip inactive" onclick="selectTipo('duvida')">❓ Dúvida</div>
+      <div class="chip inactive" onclick="selectTipo('elogio')">⭐ Elogio</div>
+    </div>
+
+    <div id="sev-section">
+      <div class="section-label">SEVERIDADE</div>
+      <div style="display:flex;gap:8px;padding:0 20px 12px;flex-shrink:0;">
+        <div class="sev-chip" onclick="selectSev(this)" style="flex:1;border:1.5px solid var(--border);border-radius:12px;padding:9px 4px;text-align:center;cursor:pointer;">
+          <div style="font-size:10px;font-weight:700;color:var(--green);">Baixa</div>
+        </div>
+        <div class="sev-chip" onclick="selectSev(this)" style="flex:1;border:1.5px solid var(--border);border-radius:12px;padding:9px 4px;text-align:center;cursor:pointer;">
+          <div style="font-size:10px;font-weight:700;color:var(--orange);">Média</div>
+        </div>
+        <div class="sev-chip sev-selected" onclick="selectSev(this)" style="flex:1;border:1.5px solid var(--yellow);border-radius:12px;padding:9px 4px;text-align:center;cursor:pointer;background:#FFFBEB;">
+          <div style="font-size:10px;font-weight:700;color:var(--yellow);">Alta</div>
+        </div>
+        <div class="sev-chip" onclick="selectSev(this)" style="flex:1;border:1.5px solid var(--border);border-radius:12px;padding:9px 4px;text-align:center;cursor:pointer;">
+          <div style="font-size:10px;font-weight:700;color:var(--red);">Crítica</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="form-group">
+      <div class="form-label">TÍTULO</div>
+      <div class="form-input filled" style="color:var(--dark);">App trava ao gerar segmentos</div>
+    </div>
+
+    <div class="form-group" style="margin-top:8px;">
+      <div class="form-label">DESCRIÇÃO</div>
+      <div class="form-input" style="height:80px;color:#bbb;font-size:14px;align-items:flex-start;display:flex;padding-top:12px;">Descreva o que aconteceu e como reproduzir...</div>
+    </div>
+
+    <div class="form-group" style="margin-top:4px;">
+      <div class="form-label">VIAGEM RELACIONADA <span style="font-weight:400;color:#bbb;">(opcional)</span></div>
+      <div class="form-input" style="color:#bbb;">Serra da Mantiqueira — jun 2026</div>
+    </div>
+
+    <button class="btn-primary" style="margin-top:16px;">✉️ Enviar feedback</button>
+  </div>
+
+  <nav class="bottom-nav">
+    <button class="nav-item" onclick="window.parent.goto('home')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+      Início
+    </button>
+    <button class="nav-item" onclick="window.parent.goto('realizadas')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+      Viagens
+    </button>
+    <button class="nav-item" onclick="window.parent.goto('ativa')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="3 11 22 2 13 21 11 13 3 11"/></svg>
+      Em Moto
+    </button>
+    <button class="nav-item  active" onclick="window.parent.goto('feedback')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>
+      Feedback
+    </button>
+    <button class="nav-item" onclick="window.parent.goto('perfil')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+      Perfil
+    </button>
+  </nav>
+
+<script>
+function selectTipo(tipo) {
+  const chips = document.querySelectorAll('#tipo-chips .chip');
+  const labels = ['bug','sugestao','duvida','elogio'];
+  chips.forEach((c, i) => {
+    c.className = labels[i] === tipo ? 'chip active' : 'chip inactive';
+  });
+  document.getElementById('sev-section').style.display = tipo === 'bug' ? 'block' : 'none';
+}
+
+function selectSev(el) {
+  document.querySelectorAll('.sev-chip').forEach(c => {
+    c.style.background = '';
+    c.style.borderColor = 'var(--border)';
+    c.classList.remove('sev-selected');
+  });
+  el.classList.add('sev-selected');
+  el.style.background = '#FFFBEB';
+  el.style.borderColor = 'var(--yellow)';
+}
+</script>
+</body></html>
