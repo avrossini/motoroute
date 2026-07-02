@@ -40,6 +40,15 @@ export default function TabsLayout() {
         }}
       />
       <Tabs.Screen
+        name="feedback"
+        options={{
+          title: "Feedback",
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons name="chatbox-outline" size={size} color={color} />
+          ),
+        }}
+      />
+      <Tabs.Screen
         name="perfil"
         options={{
           title: "Perfil",
