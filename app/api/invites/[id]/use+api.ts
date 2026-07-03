@@ -6,7 +6,7 @@ const SERVICE_KEY = process.env.SERVICE_ROLE_KEY ?? "";
 
 export async function POST(
   request: Request,
-  { params }: { params: { id: string } }
+  { id }: { id: string }
 ): Promise<Response> {
   if (!SUPABASE_URL || !SERVICE_KEY) {
     return Response.json({ error: "Server config missing" }, { status: 500 });
@@ -20,7 +20,7 @@ export async function POST(
   }
 
   const res = await fetch(
-    `${SUPABASE_URL}/rest/v1/invite_codes?id=eq.${params.id}`,
+    `${SUPABASE_URL}/rest/v1/invite_codes?id=eq.${id}`,
     {
       method: "PATCH",
       headers: {

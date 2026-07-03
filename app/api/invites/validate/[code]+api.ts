@@ -6,13 +6,13 @@ const SERVICE_KEY = process.env.SERVICE_ROLE_KEY ?? "";
 
 export async function GET(
   _request: Request,
-  { params }: { params: { code: string } }
+  { code: rawCode }: { code: string }
 ): Promise<Response> {
   if (!SUPABASE_URL || !SERVICE_KEY) {
     return Response.json({ error: "Server config missing" }, { status: 500 });
   }
 
-  const code = params.code.trim().toUpperCase();
+  const code = rawCode.trim().toUpperCase();
 
   const res = await fetch(
     `${SUPABASE_URL}/rest/v1/invite_codes?code=eq.${encodeURIComponent(code)}&limit=1`,
