@@ -1,12 +1,16 @@
 # Motor de Cálculo de Rotas — o "cérebro" da aplicação
 
-> **Status:** design aprovado em 2026-07-04 (planejamento; ainda não implementado).
+> **Status (2026-07-04):** primitivo `dividirEmTrechos` e **Rolê (`day_trip`)
+> IMPLEMENTADOS e EM PRODUÇÃO** (PRs #4 e #6). A **Expedição (`multi_day`) ainda NÃO foi
+> implementada** — o `multi_day` continua no motor antigo (`generate-segments`); falta a
+> "caixa" de divisão em dias (§6). O cutover foi **incremental por tipo** (day_trip
+> primeiro), **não** atômico (§10).
+>
 > Este documento é a **fonte da verdade da arquitetura de cálculo de rotas**. O
 > `business-logic.md` define o *comportamento de negócio* que o motor deve respeitar;
-> este documento define *como* o motor o implementa.
->
-> Ele **substitui** a estratégia descrita em `business-logic.md → ### Estratégia de
-> cálculo por comprimento de rota`, que passa a ser considerada legada no cutover.
+> este define *como* o motor o implementa. Substitui a estratégia legada de
+> `business-logic.md → ### Estratégia de cálculo por comprimento de rota` para o
+> `day_trip`; para o `multi_day`, a estratégia antiga ainda vige até a Expedição.
 
 ---
 
@@ -197,11 +201,25 @@ mesmo esforço, gasto no lugar certo.
   forma independente** (pode dar estradas diferentes; via de mão única, rota
   assimétrica). Os trechos da volta continuam a sequência.
 
-Não há conceito de dia nem de pernoite. `day_index = 1` em todos os trechos.
+Não há conceito de dia nem de pernoite. `day_index = 1` em **todos** os trechos —
+inclusive a volta, que é o **mesmo dia** da ida (data, horário e clima não somam +1 na
+volta). A separação visual **IDA/VOLTA** é feita no render por *grupos* (corte no destino
+da viagem), não pelo `day_index`.
+
+**Estado da implementação (em produção):** `src/domain/route/calcularRole.ts` +
+`app/api/role+api.ts` (API fina) + serviço `roleService`. `calcularRota` (day_trip) chama
+o motor novo e grava o posto escolhido como `stop_suggestion` selecionado + alternativas.
+Sub-opção ida/volta persistida em `trips.round_trip`. Nome do trecho = **cidade** do posto
+(§3.8). O `multi_day` NÃO usa isto ainda.
 
 ---
 
 ## 6. Motor da Expedição (`multi_day`)
+
+> 🚧 **NÃO IMPLEMENTADA (2026-07-04).** O `multi_day` ainda usa o motor antigo
+> `generate-segments`. Falta a **"caixa" de divisão em dias** abaixo — que o usuário vai
+> detalhar. A arquitetura já está pronta para recebê-la como passo plugável, reusando o
+> Motor do Rolê por dia, sem mexer no que está em produção.
 
 Dois passos:
 
@@ -231,17 +249,18 @@ Um roteiro pode ter todos os trechos válidos e ainda assim um dia inviável por
 
 ---
 
-## 7. Modelo de dados
+## 7. Modelo de dados (como ficou implementado)
 
-- O endpoint do segmento (`segments.dest_lat/dest_lng`, `destination_name`) passa a ser
-  o **posto selecionado**. Guardar o `place_id` escolhido no próprio segmento (migração
-  mínima).
-- **`stop_suggestions` continua** guardando a lista de alternativas
-  (`business-logic.md → ## Alternativas de parada, §472`). Trocar a alternativa
-  sincroniza o endpoint do segmento — mecanismo que **já existe** em `selectAlternative`
-  e passa a ser a norma, não a exceção.
-- Segmentos continuam planos com `day_index` / `is_last_of_day` (Rolê = tudo dia 1;
-  Expedição = 1..N). Sem entidade "dia" separada.
+- O endpoint do segmento (`segments.dest_lat/dest_lng`) é o **posto escolhido**;
+  `destination_name` é a **cidade** do posto (§3.8). **Não** foi adicionada coluna
+  `place_id` em `segments` — o posto (nome/`place_id`/rating) vive em `stop_suggestions`
+  com `is_selected=true`, junto das alternativas (`business-logic.md → §472`). Trocar a
+  alternativa sincroniza o endpoint (`selectAlternative`).
+- **`trips.round_trip`** (`boolean`, migration `20260704000001`) — sub-opção ida/volta do
+  Rolê.
+- Segmentos continuam planos com `day_index` / `is_last_of_day`. **Rolê = `day_index` 1
+  em tudo** (ida e volta no mesmo dia; split IDA/VOLTA é no render). Expedição usaria
+  1..N. Sem entidade "dia" separada.
 
 ---
 
@@ -269,36 +288,37 @@ Um roteiro pode ter todos os trechos válidos e ainda assim um dia inviável por
 
 ---
 
-## 10. Estratégia de substituição — cutover atômico
+## 10. Estratégia de substituição — cutover incremental (como foi feito)
 
-O motor atual serve Rolê e Expedição hoje; não se pode apagá-lo antes do substituto,
-sob pena de quebrar o app (viola a metodologia fim a fim). Portanto: **cutover
-atômico** — nada de velho e novo convivendo; um único PR troca tudo de uma vez.
-Sequência interna:
+O plano original era **cutover atômico** (um PR troca tudo). Na prática foi **incremental
+por tipo**, porque o Rolê ficou pronto antes e há valor em entregá-lo já:
 
-1. Núcleo puro + rotas-ouro passando (isolado, sem tocar no app).
-2. API nova + adaptadores.
-3. **PR de cutover:** frontend passa a chamar o novo; `generate-segments` é removido; a
-   subdivisão do `insert-stop` passa a usar o primitivo — tudo num PR.
+1. **PR #4** — primitivo puro + adapters + testes (dormente, sem tocar no app).
+2. **PR #6** — o `day_trip` passa a usar o motor novo (`/api/role`); `generate-segments`
+   **continua servindo o `multi_day`**.
+3. **Pendente** — a Expedição (§6). Só quando ela migrar é que o `generate-segments` pode
+   ser removido.
 
-**Blast radius do cutover:** `calcularRota`, `insert-stop` (subdivisão via
-`generateSegments`), e qualquer outro consumidor de `generateSegments`.
+**Consequência aceita:** velho e novo **coexistem** enquanto a Expedição não é feita. O
+`insert-stop` (subdivisão via `generateSegments`) e o `multi_day` ainda usam o motor antigo.
 
 Fluxo de entrega (fim a fim): dev → build de produção local → PR → deploy → verificação.
 
 ---
 
-## 11. Fora de escopo do primitivo (refinos futuros)
+## 11. Fora de escopo / pendências
 
-- **Caixa de divisão em dias** da Expedição (a detalhar — seção 6).
-- **Look-ahead** do primitivo (seção 3.7).
-- Rolê ida-e-volta é trivial sobre o primitivo (chama 2×) — não é refino, já entra.
+- **Expedição (`multi_day`)** — a "caixa" de divisão em dias (§6). **Principal pendência.**
+- **Look-ahead** do primitivo (§3.7) — refino v2.
+- **Mapa nativo** — o mini-mapa das alternativas e o TripMap são web-only (native é stub).
+- Limpeza dos erros de tipo `null` pré-existentes do app (revelados pela correção do
+  `database.ts`), fora do escopo do motor.
 
 ---
 
 ## 12. Histórico de decisões
 
-**2026-07-04 — design do redesenho (planejamento, sem código ainda):**
+**2026-07-04 — design do redesenho:**
 
 | Decisão | Escolha |
 |---|---|
@@ -307,8 +327,17 @@ Fluxo de entrega (fim a fim): dev → build de produção local → PR → deplo
 | Desempate entre postos | Favorito → rating → proximidade |
 | Sem posto na faixa | Recuar (antes do mín) primeiro; estender (além do máx) por último |
 | Look-ahead | Greedy simples no v1; refina depois |
-| Substituição do motor atual | Cutover atômico (um PR troca tudo) |
 | Arquitetura de código | Núcleo puro testável + API fina |
 | Verificação | Rotas-ouro automatizadas + teste manual no app |
-| Modelo de dados | Endpoint do segmento = posto; `stop_suggestions` mantém alternativas |
 | Escolha da cidade de pernoite (Expedição) | **A detalhar** |
+
+**2026-07-04 — decisões da implementação (Rolê, em produção):**
+
+| Decisão | Escolha |
+|---|---|
+| Substituição do motor | **Incremental por tipo** (não atômico): day_trip migrou (PR #6); multi_day segue no antigo |
+| Nome do trecho | **Cidade** do posto (reverse-geocode), não o nome do posto (§3.8) |
+| Rolê ida e volta | **Mesmo dia** (`day_index` 1); split IDA/VOLTA no render por grupos |
+| Alternativas de parada | Posto escolhido (selecionado) + vizinhos (não-selecionados); mini-mapa web com pinpoints numerados |
+| Preferências na criação | `nova.tsx` puxa `default_min/max_stop_km` de `user_preferences` |
+| `place_id` no segmento | **Não** criado — posto fica em `stop_suggestions`, endpoint = coords do posto |

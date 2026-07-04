@@ -101,6 +101,8 @@ O roteiro final não deve exibir labels técnicos ou identificadores não humano
 2. Se não houver nome confiável, exibir "Local a confirmar" como label do ponto
 3. Nunca tratar um ponto com label técnico como ponto normal sem notificação ao usuário
 
+> **Nome do trecho = cidade (motor buscar-primeiro, Rolê — em produção):** no motor novo o ponto de parada É um posto real, mas o **cabeçalho do trecho exibe a CIDADE** onde o posto fica (o nome do posto aparece no card ⛽ da parada). Ver [`route-engine.md`](route-engine.md) §3.8. Registrada porque já regrediu antes.
+
 - Esta regra se aplica a todos os pontos do roteiro: paradas intermediárias, fins de dia e destinos
 - Origem e destino informados pelo usuário são preservados conforme `### Preservação de origem e destino`
 
@@ -137,7 +139,7 @@ Todas as validações desta seção — distância diária alta, média acima do
 
 ### Estratégia de cálculo por comprimento de rota
 
-> **Nota (2026-07-04):** esta seção descreve a estratégia **atual (legada)**. O redesenho do motor — modelo *buscar-primeiro*, em que cada parada intermediária já é um posto real — está especificado em [`route-engine.md`](route-engine.md) e **substitui** esta estratégia no cutover. Mantida aqui como referência do comportamento vigente até a troca.
+> **Nota (2026-07-04):** o motor **buscar-primeiro** (cada parada já é um posto real) está especificado em [`route-engine.md`](route-engine.md) e **já substituiu** esta estratégia para o **Rolê (`day_trip`)**, que está em produção. Esta estratégia legada agora serve **apenas a Expedição (`multi_day`)**, até ela migrar para o motor novo (pendente).
 
 O algoritmo de geração de roteiro usa duas estratégias conforme o número de waypoints intermediários necessários (`round(totalKm / targetKm) - 1`):
 
