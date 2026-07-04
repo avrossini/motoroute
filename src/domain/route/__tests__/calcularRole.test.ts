@@ -8,6 +8,7 @@ describe('calcularRole', () => {
     const r = await calcularRole({ ...input(300, 100, 200), idaEVolta: false }, rota, stops);
     expect(r.trechos[0].posto?.placeId).toBe('P150');
     expect(r.trechos[r.trechos.length - 1].destino.nome).toBe('Destino');
+    expect(r.voltaInicio).toBeNull();
   });
 
   test('ida e volta concatena, reindexa ordem e soma os totais', async () => {
@@ -23,8 +24,10 @@ describe('calcularRole', () => {
     // totais somados
     expect(idaEVolta.totalKm).toBe(soIda.totalKm * 2);
     expect(idaEVolta.totalMin).toBe(soIda.totalMin * 2);
+    // voltaInicio aponta o 1º trecho da volta
+    expect(idaEVolta.voltaInicio).toBe(soIda.trechos.length);
     // a volta parte do Destino e termina na Origem
-    const primeiroDaVolta = idaEVolta.trechos[soIda.trechos.length];
+    const primeiroDaVolta = idaEVolta.trechos[idaEVolta.voltaInicio!];
     expect(primeiroDaVolta.origem.nome).toBe('Destino');
     expect(idaEVolta.trechos[idaEVolta.trechos.length - 1].destino.nome).toBe('Origem');
   });

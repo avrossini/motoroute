@@ -1,5 +1,5 @@
 // Wrapper de frontend do motor do Rolê — chama /api/role.
-import type { DividirResult } from "@/domain/route/types";
+import type { RoleResult } from "@/domain/route/calcularRole";
 
 export interface RoleParams {
   origem: { lat: number; lng: number; nome: string };
@@ -10,7 +10,7 @@ export interface RoleParams {
   idaEVolta?: boolean;
 }
 
-export async function calcularRoleRemoto(p: RoleParams): Promise<DividirResult> {
+export async function calcularRoleRemoto(p: RoleParams): Promise<RoleResult> {
   const res = await fetch("/api/role", {
     method: "POST",
     headers: { "Content-Type": "application/json" },

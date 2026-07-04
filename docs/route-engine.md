@@ -151,6 +151,21 @@ Em rotas onde a escolha do 1º posto afeta se o trecho final cabe (ex.: 440 km c
 
 ---
 
+### 3.8 Nome exibido do trecho = cidade do posto
+
+O endpoint intermediário de cada trecho **é** um posto, mas o **nome exibido do trecho**
+é a **cidade** onde o posto fica (reverse-geocode → `locality`/município), **não** o nome
+do estabelecimento — o nome do posto já aparece no card ⛽ da parada. Repetir o nome do
+posto no cabeçalho é redundante e menos útil para o viajante, que quer saber **em qual
+cidade** vai parar (ex.: "Poços de Caldas → Bueno Brandão", não "→ Auto Posto Retiro Ltda").
+
+- O núcleo puro nomeia o endpoint com o nome do posto (não faz I/O de geocoding).
+- O **enriquecimento para cidade é feito na API** (`app/api/role+api.ts` → `cidadeDoPonto`):
+  reverse-geocode de cada posto escolhido, reescrevendo `trecho.destino.nome` (e o `origem`
+  do trecho seguinte) com a cidade. Origem e destino informados pelo usuário são preservados.
+- **Regra registrada aqui porque já regrediu antes** — o nome do trecho nunca deve ser o
+  nome do posto.
+
 ## 4. Detalhe técnico — buscar na "janela ao longo da rota"
 
 Esta é a parte que faz ou quebra o desenho.

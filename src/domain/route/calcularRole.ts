@@ -13,17 +13,22 @@ export interface RoleInput {
   idaEVolta?: boolean;
 }
 
+export interface RoleResult extends DividirResult {
+  /** Índice do 1º trecho da volta na lista; null quando é só ida. */
+  voltaInicio: number | null;
+}
+
 export async function calcularRole(
   input: RoleInput,
   rota: RoutePort,
   stops: StopsPort
-): Promise<DividirResult> {
+): Promise<RoleResult> {
   const ida = await dividirEmTrechos(
     { origem: input.origem, destino: input.destino, faixa: input.faixa, favoritos: input.favoritos },
     rota,
     stops
   );
-  if (!input.idaEVolta) return ida;
+  if (!input.idaEVolta) return { ...ida, voltaInicio: null };
 
   // Volta: recalculada de forma independente (pode dar estradas diferentes da ida).
   const volta = await dividirEmTrechos(
@@ -40,5 +45,6 @@ export async function calcularRole(
     trechos,
     totalKm: ida.totalKm + volta.totalKm,
     totalMin: ida.totalMin + volta.totalMin,
+    voltaInicio: ida.trechos.length,
   };
 }
