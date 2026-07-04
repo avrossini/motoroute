@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import {
   View,
   Text,
@@ -131,6 +131,22 @@ export default function NovaTripScreen() {
   const [minStopKm, setMinStopKm] = useState("100");
   const [maxStopKm, setMaxStopKm] = useState("200");
   const [saving, setSaving] = useState(false);
+
+  // Pré-preenche a regra de paradas com as preferências do usuário (ajustável por viagem).
+  useEffect(() => {
+    (async () => {
+      const supabase = getSupabase();
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+      const { data } = await supabase
+        .from("user_preferences")
+        .select("default_min_stop_km, default_max_stop_km")
+        .eq("user_id", user.id)
+        .maybeSingle();
+      if (data?.default_min_stop_km != null) setMinStopKm(String(data.default_min_stop_km));
+      if (data?.default_max_stop_km != null) setMaxStopKm(String(data.default_max_stop_km));
+    })();
+  }, []);
 
   async function handleSave() {
     if (!title.trim()) { Alert.alert("Atenção", "Dê um nome para a viagem."); return; }

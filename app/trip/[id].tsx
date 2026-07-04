@@ -1323,16 +1323,14 @@ export default function TripDetailScreen() {
         });
 
         trechosRole = result.trechos;
-        const voltaInicio = result.voltaInicio;
         segRows = result.trechos.map((t, i) => ({
           trip_id: id,
           order_index: t.ordem,
-          // Rolê ida e volta: ida = dia 1, volta = dia 2 (rotulados IDA/VOLTA no render).
-          day_index: voltaInicio != null && i >= voltaInicio ? 2 : 1,
-          is_last_of_day:
-            voltaInicio != null
-              ? i === voltaInicio - 1 || i === result.trechos.length - 1
-              : i === result.trechos.length - 1,
+          // Rolê é sempre 1 dia (ida e volta no MESMO dia) → day_index 1 para todos,
+          // para data/horário/clima não somarem um dia na volta. A separação visual
+          // Ida/Volta é feita no render (grupos), não pelo day_index.
+          day_index: 1,
+          is_last_of_day: i === result.trechos.length - 1,
           origin_name: t.origem.nome,
           destination_name: t.destino.nome,
           origin_lat: t.origem.lat,
@@ -1447,8 +1445,25 @@ export default function TripDetailScreen() {
     });
   }
 
+  const isDayTrip = trip?.trip_type === "day_trip";
+  // Grupos de cards: Rolê ida-e-volta = IDA/VOLTA (corte no destino da viagem, que é o
+  // ponto de retorno); Rolê só ida = um grupo sem rótulo; multi_day = um por dia.
+  type GrupoCards = { label: string | null; segs: Segment[] };
+  const grupos: GrupoCards[] = [];
+  if (isDayTrip && trip?.round_trip) {
+    const turnaround = segments.findIndex((s) => s.destination_name === trip.destination);
+    const cut = turnaround >= 0 ? turnaround + 1 : Math.ceil(segments.length / 2);
+    grupos.push({ label: "IDA", segs: segments.slice(0, cut) });
+    grupos.push({ label: "VOLTA", segs: segments.slice(cut) });
+  } else if (isDayTrip) {
+    grupos.push({ label: null, segs: segments });
+  } else {
+    for (let d = 1; d <= maxDay; d++) {
+      grupos.push({ label: `DIA ${d}`, segs: segments.filter((s) => (s.day_index ?? 1) === d) });
+    }
+  }
   // No desktop, Ida e Volta (2 cards) ficam lado a lado; no mobile, empilhados.
-  const sideBySide = isDesktop && trip?.trip_type === "day_trip" && !!trip?.round_trip && maxDay === 2;
+  const sideBySide = isDesktop && !!isDayTrip && !!trip?.round_trip && grupos.length === 2;
 
   return (
     <View style={styles.container}>
@@ -1563,27 +1578,21 @@ export default function TripDetailScreen() {
           </View>
         ) : (
           <View style={sideBySide ? styles.dayCardsRow : undefined}>
-          {Array.from({ length: maxDay }, (_, i) => i + 1).map((dayIdx) => {
-            const daySegs = segments.filter((s) => (s.day_index ?? 1) === dayIdx);
+          {grupos.map((grupo, gi) => {
+            const daySegs = grupo.segs;
             if (daySegs.length === 0) return null;
 
+            const dayIdx = gi + 1; // nº do dia (multi_day) / índice do grupo
             const firstSeg = daySegs[0];
             const lastSeg = daySegs[daySegs.length - 1];
             const dayTotalKm = daySegs.reduce((sum, s) => sum + s.distance_km, 0);
-            const dayDate = segmentDate(trip.departure_date, dayIdx);
-            const isDayTrip = trip.trip_type === "day_trip";
-            // Rótulo do card: multi_day = "DIA N"; Rolê ida-e-volta = "IDA"/"VOLTA";
-            // Rolê só ida = sem badge (não faz sentido "Dia 1" num rolê de um dia só).
-            const dayLabel = !isDayTrip
-              ? `DIA ${dayIdx}`
-              : trip.round_trip
-              ? dayIdx === 1 ? "IDA" : "VOLTA"
-              : null;
+            // Rolê: sempre o dia de saída (ida e volta no mesmo dia). Expedição: soma os dias.
+            const dayDate = isDayTrip ? trip.departure_date : segmentDate(trip.departure_date, dayIdx);
 
             return (
-              <View key={dayIdx} style={[styles.dayCard, sideBySide && styles.dayCardHalf]}>
+              <View key={gi} style={[styles.dayCard, sideBySide && styles.dayCardHalf]}>
                 <DayHeader
-                  label={dayLabel}
+                  label={grupo.label}
                   date={dayDate}
                   originName={firstSeg.origin_name ?? ""}
                   destinName={lastSeg.destination_name ?? ""}
@@ -1802,7 +1811,7 @@ export default function TripDetailScreen() {
               {stopModal && stopModal.alternatives.length > 0 && (
                 <StopAltMap alternatives={stopModal.alternatives} />
               )}
-              {stopModal?.alternatives.map((alt) => {
+              {stopModal?.alternatives.map((alt, i) => {
                 const delta = altDeltas.get(alt.place_id);
                 const deltaLabel = loadingDeltas
                   ? "..."
@@ -1816,6 +1825,9 @@ export default function TripDetailScreen() {
                 const deltaColor = delta == null || delta === 0 ? "#888" : delta > 0 ? "#D97706" : "#16A34A";
                 return (
                   <View key={alt.place_id} style={[styles.altRow, alt.is_selected && styles.altRowSelected]}>
+                    <View style={[styles.altNum, { backgroundColor: alt.is_selected ? "#16A34A" : "#C97826" }]}>
+                      <Text style={styles.altNumText}>{i + 1}</Text>
+                    </View>
                     <TouchableOpacity
                       style={{ flex: 1 }}
                       onPress={() => selectStopAlternative(stopModal.segId, alt.place_id)}
@@ -2566,6 +2578,8 @@ const styles = StyleSheet.create({
     backgroundColor: "#FEF3E2", borderRadius: 10,
     paddingHorizontal: 10, marginHorizontal: -10, borderBottomColor: "transparent",
   },
+  altNum: { width: 22, height: 22, borderRadius: 11, alignItems: "center", justifyContent: "center" },
+  altNumText: { color: "#fff", fontSize: 11, fontWeight: "700" },
   altName: { fontSize: 14, fontWeight: "600", color: "#1A1A1A" },
   altNameSelected: { color: "#C97826" },
   altMeta: { fontSize: 12, color: "#888" },
