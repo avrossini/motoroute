@@ -21,6 +21,7 @@ import { openNavigation } from "@/platform/navigation";
 import { generateSegments, type ManualWaypoint } from "@/services/googleDirections";
 import { calcularRoleRemoto } from "@/services/roleService";
 import type { Trecho } from "@/domain/route/types";
+import { useIsDesktopWeb } from "@/hooks/useIsDesktopWeb";
 import {
   fetchSegmentWeather,
   isWeatherAvailable,
@@ -35,6 +36,7 @@ import {
 } from "@/services/placesService";
 import type { Database } from "@/types/database";
 import TripMap from "@/components/TripMap";
+import StopAltMap from "@/components/StopAltMap";
 
 interface LodgingSuggestion {
   id: string;
@@ -226,13 +228,13 @@ function WeatherPanel({ seg, departureDate }: { seg: Segment; departureDate: str
 }
 
 function DayHeader({
-  dayIndex,
+  label,
   date,
   originName,
   destinName,
   totalKm,
 }: {
-  dayIndex: number;
+  label: string | null; // "DIA 1" | "IDA" | "VOLTA" | null (sem badge, ex.: Rolê só ida)
   date: string;
   originName: string;
   destinName: string;
@@ -246,9 +248,11 @@ function DayHeader({
   return (
     <View style={styles.dayHeader}>
       <View style={{ flex: 1 }}>
-        <View style={styles.dayBadge}>
-          <Text style={styles.dayBadgeText}>DIA {dayIndex}</Text>
-        </View>
+        {label && (
+          <View style={styles.dayBadge}>
+            <Text style={styles.dayBadgeText}>{label}</Text>
+          </View>
+        )}
         <Text style={styles.dayRoute} numberOfLines={1}>
           {originName} → {destinName}
         </Text>
@@ -262,6 +266,7 @@ function DayHeader({
 function SegmentCard({
   seg,
   stop,
+  showDayEnd = true,
   departureDate,
   departureTime,
   onStopPress,
@@ -270,6 +275,7 @@ function SegmentCard({
 }: {
   seg: Segment;
   stop?: StopSuggestion;
+  showDayEnd?: boolean; // false no Rolê (day_trip) — "Fim Dia" não faz sentido
   departureDate: string;
   departureTime: string;
   onStopPress?: () => void;
@@ -305,7 +311,7 @@ function SegmentCard({
             <View style={styles.badgeTime}>
               <Text style={styles.badgeTimeText}>{fmtDuration(seg.duration_minutes)}</Text>
             </View>
-            {seg.is_last_of_day && (
+            {seg.is_last_of_day && showDayEnd && (
               <Text style={styles.segDayEndLabel}>Fim Dia {seg.day_index}</Text>
             )}
           </View>
@@ -451,6 +457,7 @@ export default function TripDetailScreen() {
   } | null>(null);
   const [mergeExecuting, setMergeExecuting] = useState(false);
   const [activeView, setActiveView] = useState<"list" | "map">("list");
+  const isDesktop = useIsDesktopWeb();
   const [fetchingWeather, setFetchingWeather] = useState(false);
   const [stops, setStops] = useState<Map<string, StopSuggestion>>(new Map());
   const [lodging, setLodging] = useState<Map<number, LodgingSuggestion>>(new Map());
@@ -1316,11 +1323,16 @@ export default function TripDetailScreen() {
         });
 
         trechosRole = result.trechos;
+        const voltaInicio = result.voltaInicio;
         segRows = result.trechos.map((t, i) => ({
           trip_id: id,
           order_index: t.ordem,
-          day_index: 1,
-          is_last_of_day: i === result.trechos.length - 1,
+          // Rolê ida e volta: ida = dia 1, volta = dia 2 (rotulados IDA/VOLTA no render).
+          day_index: voltaInicio != null && i >= voltaInicio ? 2 : 1,
+          is_last_of_day:
+            voltaInicio != null
+              ? i === voltaInicio - 1 || i === result.trechos.length - 1
+              : i === result.trechos.length - 1,
           origin_name: t.origem.nome,
           destination_name: t.destino.nome,
           origin_lat: t.origem.lat,
@@ -1435,6 +1447,9 @@ export default function TripDetailScreen() {
     });
   }
 
+  // No desktop, Ida e Volta (2 cards) ficam lado a lado; no mobile, empilhados.
+  const sideBySide = isDesktop && trip?.trip_type === "day_trip" && !!trip?.round_trip && maxDay === 2;
+
   return (
     <View style={styles.container}>
       <View style={styles.topBar}>
@@ -1547,7 +1562,8 @@ export default function TripDetailScreen() {
             </Text>
           </View>
         ) : (
-          Array.from({ length: maxDay }, (_, i) => i + 1).map((dayIdx) => {
+          <View style={sideBySide ? styles.dayCardsRow : undefined}>
+          {Array.from({ length: maxDay }, (_, i) => i + 1).map((dayIdx) => {
             const daySegs = segments.filter((s) => (s.day_index ?? 1) === dayIdx);
             if (daySegs.length === 0) return null;
 
@@ -1555,11 +1571,19 @@ export default function TripDetailScreen() {
             const lastSeg = daySegs[daySegs.length - 1];
             const dayTotalKm = daySegs.reduce((sum, s) => sum + s.distance_km, 0);
             const dayDate = segmentDate(trip.departure_date, dayIdx);
+            const isDayTrip = trip.trip_type === "day_trip";
+            // Rótulo do card: multi_day = "DIA N"; Rolê ida-e-volta = "IDA"/"VOLTA";
+            // Rolê só ida = sem badge (não faz sentido "Dia 1" num rolê de um dia só).
+            const dayLabel = !isDayTrip
+              ? `DIA ${dayIdx}`
+              : trip.round_trip
+              ? dayIdx === 1 ? "IDA" : "VOLTA"
+              : null;
 
             return (
-              <View key={dayIdx} style={styles.dayCard}>
+              <View key={dayIdx} style={[styles.dayCard, sideBySide && styles.dayCardHalf]}>
                 <DayHeader
-                  dayIndex={dayIdx}
+                  label={dayLabel}
                   date={dayDate}
                   originName={firstSeg.origin_name ?? ""}
                   destinName={lastSeg.destination_name ?? ""}
@@ -1579,7 +1603,7 @@ export default function TripDetailScreen() {
                   {daySegs.map((seg, segIdx) => {
                     const globalIdx = segments.indexOf(seg);
                     const isLastSeg = globalIdx === segments.length - 1;
-                    const showLodging = seg.is_last_of_day && dayIdx < maxDay;
+                    const showLodging = seg.is_last_of_day && dayIdx < maxDay && !isDayTrip;
                     const wpsAfter = waypoints.filter((w) => w.order_index === globalIdx);
                     const depTime = segmentTimes.get(seg.id) ?? baseTime;
 
@@ -1588,6 +1612,7 @@ export default function TripDetailScreen() {
                         <SegmentCard
                           seg={seg}
                           stop={stops.get(seg.id)}
+                          showDayEnd={!isDayTrip}
                           departureDate={trip.departure_date}
                           departureTime={depTime}
                           onStopPress={() => openStopAlternatives(seg.id)}
@@ -1672,7 +1697,8 @@ export default function TripDetailScreen() {
                 </View>
               </View>
             );
-          })
+          })}
+          </View>
         )}
 
         {/* Action buttons (D8) */}
@@ -1773,6 +1799,9 @@ export default function TripDetailScreen() {
             <Pressable style={styles.modalSheet} onPress={() => {}}>
               <View style={styles.modalHandle} />
               <Text style={styles.modalTitle}>Alternativas de parada</Text>
+              {stopModal && stopModal.alternatives.length > 0 && (
+                <StopAltMap alternatives={stopModal.alternatives} />
+              )}
               {stopModal?.alternatives.map((alt) => {
                 const delta = altDeltas.get(alt.place_id);
                 const deltaLabel = loadingDeltas
@@ -2300,6 +2329,8 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 2 },
     elevation: 2,
   },
+  dayCardsRow: { flexDirection: "row", alignItems: "flex-start" },
+  dayCardHalf: { flex: 1 },
   dayAlertBanner: {
     backgroundColor: "#FFF3CD",
     paddingHorizontal: 14,
