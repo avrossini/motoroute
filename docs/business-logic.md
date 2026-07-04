@@ -27,6 +27,8 @@ Todas as regras se aplicam igualmente à versão mobile e à versão web.
 
 ## Geração automática de roteiro
 
+> **O motor de cálculo de rotas — o "cérebro" da aplicação — tem especificação própria e detalhada em [`route-engine.md`](route-engine.md).** Aquele documento é a fonte da verdade da *arquitetura* do cálculo (o primitivo de divisão em trechos, o Motor do Rolê e o Motor da Expedição). As regras desta seção definem o *comportamento de negócio* que o motor deve respeitar; `route-engine.md` define *como* o motor as implementa.
+
 ### Preservação de origem e destino
 Dentro do cálculo do roteiro, o `origin_name` do primeiro segmento e o `destination_name` do último segmento devem ser exatamente os strings recebidos como parâmetros pela API — nunca substituídos por reverse geocoding. O geocoding de validação da origem/destino ocorre na etapa de criação da viagem (escopo separado) e não é alterado por este fluxo.
 
@@ -134,6 +136,9 @@ Todas as validações desta seção — distância diária alta, média acima do
 - Bloquear automaticamente é inadequado: ritmo, moto, experiência e condições da estrada variam de pessoa para pessoa
 
 ### Estratégia de cálculo por comprimento de rota
+
+> **Nota (2026-07-04):** esta seção descreve a estratégia **atual (legada)**. O redesenho do motor — modelo *buscar-primeiro*, em que cada parada intermediária já é um posto real — está especificado em [`route-engine.md`](route-engine.md) e **substitui** esta estratégia no cutover. Mantida aqui como referência do comportamento vigente até a troca.
+
 O algoritmo de geração de roteiro usa duas estratégias conforme o número de waypoints intermediários necessários (`round(totalKm / targetKm) - 1`):
 
 **Viagens curtas (≤ 24 waypoints intermediários, ~até 3.750 km com target de 150 km):**
