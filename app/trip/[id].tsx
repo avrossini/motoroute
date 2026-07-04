@@ -19,6 +19,8 @@ import { useFocusEffect } from "expo-router";
 import { getSupabase } from "@/services/supabase";
 import { openNavigation } from "@/platform/navigation";
 import { generateSegments, type ManualWaypoint } from "@/services/googleDirections";
+import { calcularRoleRemoto } from "@/services/roleService";
+import type { Trecho } from "@/domain/route/types";
 import {
   fetchSegmentWeather,
   isWeatherAvailable,
@@ -770,6 +772,52 @@ export default function TripDetailScreen() {
     }
   }
 
+  // day_trip (Rolê): o motor já escolheu o posto de cada trecho. Grava o escolhido
+  // como selecionado e popula as alternativas em volta (não-selecionadas) — §472.
+  async function attachRolePostos(segs: Segment[], trechos: Trecho[]) {
+    const supabase = getSupabase();
+    const intermediate = segs.slice(0, -1); // o último trecho (chegada) não tem posto
+    const BATCH = 8;
+    for (let i = 0; i < intermediate.length; i += BATCH) {
+      await Promise.allSettled(
+        intermediate.slice(i, i + BATCH).map(async (seg, bi) => {
+          const chosen = trechos[i + bi]?.posto ?? null;
+          const { results } = await fetchStopSuggestions(seg.dest_lat, seg.dest_lng);
+          await supabase.from("stop_suggestions").delete().eq("segment_id", seg.id);
+          const rows: any[] = [];
+          if (chosen) {
+            rows.push({
+              segment_id: seg.id,
+              place_id: chosen.placeId,
+              name: chosen.nome,
+              rating: chosen.rating,
+              total_ratings: chosen.totalRatings,
+              is_24h: chosen.is24h,
+              latitude: chosen.lat,
+              longitude: chosen.lng,
+              is_selected: true,
+            });
+          }
+          for (const r of results) {
+            if (chosen && r.place_id === chosen.placeId) continue; // dedup o escolhido
+            rows.push({
+              segment_id: seg.id,
+              place_id: r.place_id,
+              name: r.name,
+              rating: r.rating,
+              total_ratings: r.total_ratings,
+              is_24h: r.is_24h,
+              latitude: r.latitude,
+              longitude: r.longitude,
+              is_selected: false,
+            });
+          }
+          if (rows.length > 0) await supabase.from("stop_suggestions").insert(rows);
+        })
+      );
+    }
+  }
+
   async function confirmDeleteTrip() {
     if (!trip) return;
     setDeleting(true);
@@ -1243,45 +1291,89 @@ export default function TripDetailScreen() {
     if (!activeTripVal) return;
     setCalculating(true);
     try {
-      const manualWps: ManualWaypoint[] = overrideWaypoints ?? waypoints.map((w) => ({
-        name: w.name,
-        lat: w.latitude,
-        lng: w.longitude,
-      }));
-      const result = await generateSegments(
-        activeTripVal.origin,
-        activeTripVal.destination,
-        activeTripVal.min_stop_km,
-        activeTripVal.max_stop_km,
-        activeTripVal.num_days,
-        manualWps.length > 0 ? manualWps : undefined,
-        activeTripVal.trip_type
-      );
-
-      if (result.avg_daily_km && result.avg_daily_km > 500) {
-        const isExtremo = (result.avg_daily_km ?? 0) > 650;
-        Alert.alert(
-          isExtremo ? "Expedição muito puxada" : "Ritmo intenso",
-          `Esta expedição terá média de ${result.avg_daily_km} km por dia. Para uma viagem de moto, considere adicionar mais dias ou revisar o ritmo.`,
-          [{ text: "Entendi" }]
-        );
-      }
-
       const supabase = getSupabase();
-      await supabase.from("segments").delete().eq("trip_id", id);
-      await supabase.from("segments").insert(
-        result.segments.map(({ waypoint_lat: _wlat, waypoint_lng: _wlng, ...s }) => ({ ...s, trip_id: id }))
-      );
 
-      const stopCount = Math.max(0, result.segments.length - 1);
-      await supabase
-        .from("trips")
-        .update({
+      // Monta os segmentos: day_trip (Rolê) usa o novo motor buscar-primeiro;
+      // multi_day (Expedição) segue no generate-segments até o cutover da Expedição.
+      let segRows: any[];
+      let totals: { total_distance_km: number; total_duration_min: number; stop_count: number };
+      let trechosRole: Trecho[] | null = null;
+
+      if (activeTripVal.trip_type === "day_trip") {
+        const { data: { user: authUser } } = await supabase.auth.getUser();
+        const { data: favData } = authUser
+          ? await supabase.from("favorites").select("place_id").eq("user_id", authUser.id)
+          : { data: null };
+        const favoritos = (favData ?? []).map((f) => f.place_id);
+
+        const result = await calcularRoleRemoto({
+          origem: { lat: Number(activeTripVal.origin_lat), lng: Number(activeTripVal.origin_lng), nome: activeTripVal.origin },
+          destino: { lat: Number(activeTripVal.dest_lat), lng: Number(activeTripVal.dest_lng), nome: activeTripVal.destination },
+          minStopKm: activeTripVal.min_stop_km,
+          maxStopKm: activeTripVal.max_stop_km,
+          favoritos,
+          idaEVolta: false, // a sub-opção ida/volta entra na Fatia 2
+        });
+
+        trechosRole = result.trechos;
+        segRows = result.trechos.map((t, i) => ({
+          trip_id: id,
+          order_index: t.ordem,
+          day_index: 1,
+          is_last_of_day: i === result.trechos.length - 1,
+          origin_name: t.origem.nome,
+          destination_name: t.destino.nome,
+          origin_lat: t.origem.lat,
+          origin_lng: t.origem.lng,
+          dest_lat: t.destino.lat,
+          dest_lng: t.destino.lng,
+          distance_km: t.distanciaKm,
+          duration_minutes: t.duracaoMin,
+          route_summary: t.rodovia,
+          has_alert: t.alertas.length > 0,
+          alert_types: t.alertas.length > 0 ? t.alertas : null,
+        }));
+        totals = {
+          total_distance_km: result.totalKm,
+          total_duration_min: result.totalMin,
+          stop_count: Math.max(0, result.trechos.length - 1),
+        };
+      } else {
+        const manualWps: ManualWaypoint[] = overrideWaypoints ?? waypoints.map((w) => ({
+          name: w.name,
+          lat: w.latitude,
+          lng: w.longitude,
+        }));
+        const result = await generateSegments(
+          activeTripVal.origin,
+          activeTripVal.destination,
+          activeTripVal.min_stop_km,
+          activeTripVal.max_stop_km,
+          activeTripVal.num_days,
+          manualWps.length > 0 ? manualWps : undefined,
+          activeTripVal.trip_type
+        );
+
+        if (result.avg_daily_km && result.avg_daily_km > 500) {
+          const isExtremo = (result.avg_daily_km ?? 0) > 650;
+          Alert.alert(
+            isExtremo ? "Expedição muito puxada" : "Ritmo intenso",
+            `Esta expedição terá média de ${result.avg_daily_km} km por dia. Para uma viagem de moto, considere adicionar mais dias ou revisar o ritmo.`,
+            [{ text: "Entendi" }]
+          );
+        }
+
+        segRows = result.segments.map(({ waypoint_lat: _wlat, waypoint_lng: _wlng, ...s }) => ({ ...s, trip_id: id }));
+        totals = {
           total_distance_km: result.total_km,
           total_duration_min: result.total_duration_min,
-          stop_count: stopCount,
-        })
-        .eq("id", id);
+          stop_count: Math.max(0, result.segments.length - 1),
+        };
+      }
+
+      await supabase.from("segments").delete().eq("trip_id", id);
+      await supabase.from("segments").insert(segRows);
+      await supabase.from("trips").update(totals).eq("id", id);
 
       await load();
 
@@ -1293,7 +1385,7 @@ export default function TripDetailScreen() {
       if (freshSegs && freshSegs.length > 0) {
         await Promise.all([
           fetchWeather(freshSegs, activeTripVal.departure_date),
-          fetchStops(freshSegs),
+          trechosRole ? attachRolePostos(freshSegs, trechosRole) : fetchStops(freshSegs),
         ]);
         await load();
       }
