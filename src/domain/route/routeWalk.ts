@@ -1,71 +1,62 @@
-// Caminhada de km sobre os steps do Directions. É a peça que "faz ou quebra"
-// o primitivo: como acumular distância on-road e projetar um posto de volta à rota.
-import type { Ponto, RawLeg, RawStep } from './types';
+// Caminhada de km sobre a GEOMETRIA FINA da rota (polyline decodificada).
+// É a peça que "faz ou quebra" o primitivo: os steps do Directions são grossos
+// demais em rodovia (um step pode ter centenas de km), então amostrar/projetar
+// sobre eles coloca paradas no lugar errado. Trabalhamos sobre os pontos da
+// polyline, densos o bastante para amostrar paradas a cada ~150 km.
+import type { Ponto, RawStep } from './types';
 import { haversineKm } from './geo';
 
-/** Um step com km/min acumulados desde o início da leg. `end` é sempre on-road. */
-export interface StepAcum {
-  end: Ponto;
+/** Um ponto da geometria da rota com km acumulado desde a origem. */
+export interface CaminhoPonto {
+  lat: number;
+  lng: number;
   cumKm: number;
-  cumMin: number;
-  htmlInstructions: string;
 }
 
-/** Normaliza os steps de uma leg em pontos com km/min acumulados. */
-export function acumularSteps(leg: RawLeg): StepAcum[] {
-  const out: StepAcum[] = [];
-  let cumKm = 0;
-  let cumMin = 0;
-  for (const s of leg.steps) {
-    cumKm += (s.distanceMeters ?? 0) / 1000;
-    cumMin += (s.durationSeconds ?? 0) / 60;
-    out.push({
-      end: s.end,
-      cumKm,
-      cumMin,
-      htmlInstructions: s.htmlInstructions ?? '',
-    });
+/** Constrói o caminho (pontos + km acumulado) a partir da geometria decodificada. */
+export function construirCaminho(pontos: Ponto[]): CaminhoPonto[] {
+  const caminho: CaminhoPonto[] = [];
+  let cum = 0;
+  for (let i = 0; i < pontos.length; i++) {
+    if (i > 0) cum += haversineKm(pontos[i - 1], pontos[i]);
+    caminho.push({ lat: pontos[i].lat, lng: pontos[i].lng, cumKm: cum });
   }
-  return out;
+  return caminho;
 }
 
-/** Km total da rota (cumKm do último step). */
-export function kmTotal(steps: StepAcum[]): number {
-  return steps.length === 0 ? 0 : steps[steps.length - 1].cumKm;
+/** Km total da rota (cumKm do último ponto do caminho). */
+export function kmTotalCaminho(caminho: CaminhoPonto[]): number {
+  return caminho.length === 0 ? 0 : caminho[caminho.length - 1].cumKm;
 }
 
 /**
- * Coordenada on-road no alvo: o `end` do primeiro step cujo km acumulado
- * cruza `alvoKm`. Nunca interpola — sempre um ponto real de step do Google.
- * Se `alvoKm` passa do total, devolve o último ponto.
+ * Coordenada da rota no alvo: o primeiro ponto do caminho cujo km acumulado
+ * cruza `alvoKm`. Se `alvoKm` passa do total, devolve o último ponto.
  */
-export function amostrarPontoNoAlvo(steps: StepAcum[], alvoKm: number): Ponto {
-  for (const s of steps) {
-    if (s.cumKm >= alvoKm) return s.end;
+export function amostrarPontoNoAlvo(caminho: CaminhoPonto[], alvoKm: number): Ponto {
+  for (const p of caminho) {
+    if (p.cumKm >= alvoKm) return { lat: p.lat, lng: p.lng };
   }
-  return steps[steps.length - 1].end;
+  const ult = caminho[caminho.length - 1];
+  return { lat: ult.lat, lng: ult.lng };
 }
 
 /**
- * Km rodoviário (along-route) aproximado até um posto: projeta o posto ao
- * step-end mais próximo por haversine, considerando SÓ steps à frente de
+ * Km rodoviário (along-route) aproximado até um posto: projeta o posto ao ponto
+ * do caminho mais próximo por haversine, considerando SÓ pontos à frente de
  * `desdeKm` (evita ambiguidade em alças/ida-e-volta), e devolve o cumKm desse
- * step. É a aproximação central do v1 — a distância real é reconciliada depois
- * pela chamada Directions final que passa pelos postos escolhidos.
+ * ponto. Aproximação do v1 — a distância real é reconciliada pela Directions
+ * final que passa pelos postos escolhidos.
  */
-export function kmRodoviarioAte(
-  steps: StepAcum[],
-  posto: Ponto,
-  desdeKm: number
-): number {
+export function kmRodoviarioAte(caminho: CaminhoPonto[], posto: Ponto, desdeKm: number): number {
   let melhorKm = desdeKm;
   let melhorDist = Infinity;
-  for (const s of steps) {
-    if (s.cumKm < desdeKm) continue;
-    const d = haversineKm(s.end, posto);
+  for (const p of caminho) {
+    if (p.cumKm < desdeKm) continue;
+    const d = haversineKm({ lat: p.lat, lng: p.lng }, posto);
     if (d < melhorDist) {
       melhorDist = d;
-      melhorKm = s.cumKm;
+      melhorKm = p.cumKm;
     }
   }
   return melhorKm;

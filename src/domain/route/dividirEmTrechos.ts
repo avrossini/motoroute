@@ -14,12 +14,12 @@ import type {
   RawDirections,
 } from './types';
 import {
-  acumularSteps,
-  kmTotal,
+  construirCaminho,
+  kmTotalCaminho,
   amostrarPontoNoAlvo,
   kmRodoviarioAte,
   rodoviaPrincipal,
-  type StepAcum,
+  type CaminhoPonto,
 } from './routeWalk';
 import { escolherPosto, type EscolhaPosto, type PostoComKm } from './scoring';
 import { resolverSemPosto } from './cascata';
@@ -58,14 +58,14 @@ function paradaDePosto(esc: EscolhaPosto): Parada {
  * ponto "a confirmar" (sem_posto).
  */
 async function decidirParada(
-  steps0: StepAcum[],
+  caminho: CaminhoPonto[],
   atualKm: number,
   input: DividirInput,
   stops: StopsPort
 ): Promise<Parada> {
   const { faixa, favoritos } = input;
   const alvoAbs = atualKm + (faixa.min + faixa.max) / 2;
-  const pontoAlvo = amostrarPontoNoAlvo(steps0, alvoAbs);
+  const pontoAlvo = amostrarPontoNoAlvo(caminho, alvoAbs);
   const raioBaseKm = Math.min((faixa.max - faixa.min) / 2 + MARGEM_KM, RAIO_MAX_KM);
 
   let raioKm = raioBaseKm;
@@ -73,7 +73,7 @@ async function decidirParada(
     const brutos = await stops.searchStops(pontoAlvo.lat, pontoAlvo.lng, raioKm * 1000);
     const comKm: PostoComKm[] = brutos.map((p) => ({
       posto: p,
-      km: kmRodoviarioAte(steps0, { lat: p.lat, lng: p.lng }, atualKm),
+      km: kmRodoviarioAte(caminho, { lat: p.lat, lng: p.lng }, atualKm),
     }));
 
     const naFaixa = comKm.filter((c) => {
@@ -111,8 +111,8 @@ export async function dividirEmTrechos(
   // 1. Rota inicial (1 chamada Directions)
   const raw0 = await rota.getRoute(origem, destino);
   assertOk(raw0);
-  const steps0 = acumularSteps(raw0.legs[0]);
-  const total = kmTotal(steps0);
+  const caminho = construirCaminho(raw0.pontos);
+  const total = kmTotalCaminho(caminho);
 
   // Caso trivial: cabe em 1 trecho (não chama Places)
   if (total <= faixa.max) {
@@ -136,8 +136,8 @@ export async function dividirEmTrechos(
   let atualKm = 0;
   const MAX_ITER = 200; // backstop contra loop patológico
   for (let guard = 0; total - atualKm > faixa.max && guard < MAX_ITER; guard++) {
-    const parada = await decidirParada(steps0, atualKm, input, stops);
-    const novoKm = kmRodoviarioAte(steps0, parada.ponto, atualKm);
+    const parada = await decidirParada(caminho, atualKm, input, stops);
+    const novoKm = kmRodoviarioAte(caminho, parada.ponto, atualKm);
     paradas.push(parada);
     if (novoKm <= atualKm) break; // proteção contra não-avanço
     atualKm = novoKm;

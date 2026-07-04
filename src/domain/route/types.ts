@@ -79,6 +79,8 @@ export interface RawLeg {
 export interface RawDirections {
   status: string; // 'OK' quando válido
   summary: string;
+  /** Geometria fina da rota (overview polyline decodificado) — para amostragem/projeção. */
+  pontos: Ponto[];
   legs: RawLeg[];
 }
 

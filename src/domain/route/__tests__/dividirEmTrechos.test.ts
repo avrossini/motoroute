@@ -10,7 +10,8 @@ import { dividirEmTrechos } from '../dividirEmTrechos';
 // ─────────────────────────────────────────────────────────────────────────────
 
 const LAT = -20;
-const KM_POR_GRAU_LNG = 111.32 * Math.cos((LAT * Math.PI) / 180);
+// Calibrado ao mesmo raio (6371) do haversineKm → 1 unidade = 1 km real, sem drift.
+const KM_POR_GRAU_LNG = (6371 * Math.PI * Math.cos((LAT * Math.PI) / 180)) / 180;
 const lngNoKm = (km: number): number => -45 - km / KM_POR_GRAU_LNG;
 const pontoNoKm = (km: number): Ponto => ({ lat: LAT, lng: lngNoKm(km) });
 
@@ -39,8 +40,12 @@ const cumKms = (steps: RawStep[]): number[] => {
 
 class FakeRoute implements RoutePort {
   private cum: number[];
+  private pontos: Ponto[]; // geometria fina: 1 ponto por km (pontos[i] está no km i)
   constructor(private steps: RawStep[], private summary = 'BR-101') {
     this.cum = cumKms(steps);
+    const totalKm = this.cum[this.cum.length - 1] ?? 0;
+    this.pontos = [];
+    for (let k = 0; k <= totalKm + 1e-6; k += 1) this.pontos.push(pontoNoKm(k));
   }
   private total(): number {
     return this.cum[this.cum.length - 1] ?? 0;
@@ -48,11 +53,11 @@ class FakeRoute implements RoutePort {
   private projetar(p: Ponto): number {
     let bk = 0;
     let bd = Infinity;
-    this.steps.forEach((s, i) => {
-      const d = haversineKm(s.end, p);
+    this.pontos.forEach((pt, i) => {
+      const d = haversineKm(pt, p);
       if (d < bd) {
         bd = d;
-        bk = this.cum[i];
+        bk = i; // pontos[i] está no km i
       }
     });
     return bk;
@@ -69,12 +74,12 @@ class FakeRoute implements RoutePort {
   }
   async getRoute(_o: Ponto | string, _d: Ponto | string, wps?: Ponto[]): Promise<RawDirections> {
     if (!wps || wps.length === 0) {
-      return { status: 'OK', summary: this.summary, legs: [this.legEntre(0, this.total())] };
+      return { status: 'OK', summary: this.summary, pontos: this.pontos, legs: [this.legEntre(0, this.total())] };
     }
     const bounds = [0, ...wps.map((w) => this.projetar(w)), this.total()];
     const legs: RawLeg[] = [];
     for (let i = 0; i < bounds.length - 1; i++) legs.push(this.legEntre(bounds[i], bounds[i + 1]));
-    return { status: 'OK', summary: this.summary, legs };
+    return { status: 'OK', summary: this.summary, pontos: [], legs };
   }
 }
 
