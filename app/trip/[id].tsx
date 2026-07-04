@@ -19,6 +19,9 @@ import { useFocusEffect } from "expo-router";
 import { getSupabase } from "@/services/supabase";
 import { openNavigation } from "@/platform/navigation";
 import { generateSegments, type ManualWaypoint } from "@/services/googleDirections";
+import { calcularRoleRemoto } from "@/services/roleService";
+import type { Trecho } from "@/domain/route/types";
+import { useIsDesktopWeb } from "@/hooks/useIsDesktopWeb";
 import {
   fetchSegmentWeather,
   isWeatherAvailable,
@@ -33,6 +36,7 @@ import {
 } from "@/services/placesService";
 import type { Database } from "@/types/database";
 import TripMap from "@/components/TripMap";
+import StopAltMap from "@/components/StopAltMap";
 
 interface LodgingSuggestion {
   id: string;
@@ -224,13 +228,13 @@ function WeatherPanel({ seg, departureDate }: { seg: Segment; departureDate: str
 }
 
 function DayHeader({
-  dayIndex,
+  label,
   date,
   originName,
   destinName,
   totalKm,
 }: {
-  dayIndex: number;
+  label: string | null; // "DIA 1" | "IDA" | "VOLTA" | null (sem badge, ex.: Rolê só ida)
   date: string;
   originName: string;
   destinName: string;
@@ -244,9 +248,11 @@ function DayHeader({
   return (
     <View style={styles.dayHeader}>
       <View style={{ flex: 1 }}>
-        <View style={styles.dayBadge}>
-          <Text style={styles.dayBadgeText}>DIA {dayIndex}</Text>
-        </View>
+        {label && (
+          <View style={styles.dayBadge}>
+            <Text style={styles.dayBadgeText}>{label}</Text>
+          </View>
+        )}
         <Text style={styles.dayRoute} numberOfLines={1}>
           {originName} → {destinName}
         </Text>
@@ -260,6 +266,7 @@ function DayHeader({
 function SegmentCard({
   seg,
   stop,
+  showDayEnd = true,
   departureDate,
   departureTime,
   onStopPress,
@@ -268,6 +275,7 @@ function SegmentCard({
 }: {
   seg: Segment;
   stop?: StopSuggestion;
+  showDayEnd?: boolean; // false no Rolê (day_trip) — "Fim Dia" não faz sentido
   departureDate: string;
   departureTime: string;
   onStopPress?: () => void;
@@ -303,7 +311,7 @@ function SegmentCard({
             <View style={styles.badgeTime}>
               <Text style={styles.badgeTimeText}>{fmtDuration(seg.duration_minutes)}</Text>
             </View>
-            {seg.is_last_of_day && (
+            {seg.is_last_of_day && showDayEnd && (
               <Text style={styles.segDayEndLabel}>Fim Dia {seg.day_index}</Text>
             )}
           </View>
@@ -449,6 +457,7 @@ export default function TripDetailScreen() {
   } | null>(null);
   const [mergeExecuting, setMergeExecuting] = useState(false);
   const [activeView, setActiveView] = useState<"list" | "map">("list");
+  const isDesktop = useIsDesktopWeb();
   const [fetchingWeather, setFetchingWeather] = useState(false);
   const [stops, setStops] = useState<Map<string, StopSuggestion>>(new Map());
   const [lodging, setLodging] = useState<Map<number, LodgingSuggestion>>(new Map());
@@ -765,6 +774,52 @@ export default function TripDetailScreen() {
               is_selected: s.place_id === selectedId,
             }))
           );
+        })
+      );
+    }
+  }
+
+  // day_trip (Rolê): o motor já escolheu o posto de cada trecho. Grava o escolhido
+  // como selecionado e popula as alternativas em volta (não-selecionadas) — §472.
+  async function attachRolePostos(segs: Segment[], trechos: Trecho[]) {
+    const supabase = getSupabase();
+    const intermediate = segs.slice(0, -1); // o último trecho (chegada) não tem posto
+    const BATCH = 8;
+    for (let i = 0; i < intermediate.length; i += BATCH) {
+      await Promise.allSettled(
+        intermediate.slice(i, i + BATCH).map(async (seg, bi) => {
+          const chosen = trechos[i + bi]?.posto ?? null;
+          const { results } = await fetchStopSuggestions(seg.dest_lat, seg.dest_lng);
+          await supabase.from("stop_suggestions").delete().eq("segment_id", seg.id);
+          const rows: any[] = [];
+          if (chosen) {
+            rows.push({
+              segment_id: seg.id,
+              place_id: chosen.placeId,
+              name: chosen.nome,
+              rating: chosen.rating,
+              total_ratings: chosen.totalRatings,
+              is_24h: chosen.is24h,
+              latitude: chosen.lat,
+              longitude: chosen.lng,
+              is_selected: true,
+            });
+          }
+          for (const r of results) {
+            if (chosen && r.place_id === chosen.placeId) continue; // dedup o escolhido
+            rows.push({
+              segment_id: seg.id,
+              place_id: r.place_id,
+              name: r.name,
+              rating: r.rating,
+              total_ratings: r.total_ratings,
+              is_24h: r.is_24h,
+              latitude: r.latitude,
+              longitude: r.longitude,
+              is_selected: false,
+            });
+          }
+          if (rows.length > 0) await supabase.from("stop_suggestions").insert(rows);
         })
       );
     }
@@ -1243,45 +1298,92 @@ export default function TripDetailScreen() {
     if (!activeTripVal) return;
     setCalculating(true);
     try {
-      const manualWps: ManualWaypoint[] = overrideWaypoints ?? waypoints.map((w) => ({
-        name: w.name,
-        lat: w.latitude,
-        lng: w.longitude,
-      }));
-      const result = await generateSegments(
-        activeTripVal.origin,
-        activeTripVal.destination,
-        activeTripVal.min_stop_km,
-        activeTripVal.max_stop_km,
-        activeTripVal.num_days,
-        manualWps.length > 0 ? manualWps : undefined,
-        activeTripVal.trip_type
-      );
-
-      if (result.avg_daily_km && result.avg_daily_km > 500) {
-        const isExtremo = (result.avg_daily_km ?? 0) > 650;
-        Alert.alert(
-          isExtremo ? "Expedição muito puxada" : "Ritmo intenso",
-          `Esta expedição terá média de ${result.avg_daily_km} km por dia. Para uma viagem de moto, considere adicionar mais dias ou revisar o ritmo.`,
-          [{ text: "Entendi" }]
-        );
-      }
-
       const supabase = getSupabase();
-      await supabase.from("segments").delete().eq("trip_id", id);
-      await supabase.from("segments").insert(
-        result.segments.map(({ waypoint_lat: _wlat, waypoint_lng: _wlng, ...s }) => ({ ...s, trip_id: id }))
-      );
 
-      const stopCount = Math.max(0, result.segments.length - 1);
-      await supabase
-        .from("trips")
-        .update({
+      // Monta os segmentos: day_trip (Rolê) usa o novo motor buscar-primeiro;
+      // multi_day (Expedição) segue no generate-segments até o cutover da Expedição.
+      let segRows: any[];
+      let totals: { total_distance_km: number; total_duration_min: number; stop_count: number };
+      let trechosRole: Trecho[] | null = null;
+
+      if (activeTripVal.trip_type === "day_trip") {
+        const { data: { user: authUser } } = await supabase.auth.getUser();
+        const { data: favData } = authUser
+          ? await supabase.from("favorites").select("place_id").eq("user_id", authUser.id)
+          : { data: null };
+        const favoritos = (favData ?? []).map((f) => f.place_id);
+
+        const result = await calcularRoleRemoto({
+          origem: { lat: Number(activeTripVal.origin_lat), lng: Number(activeTripVal.origin_lng), nome: activeTripVal.origin },
+          destino: { lat: Number(activeTripVal.dest_lat), lng: Number(activeTripVal.dest_lng), nome: activeTripVal.destination },
+          minStopKm: activeTripVal.min_stop_km,
+          maxStopKm: activeTripVal.max_stop_km,
+          favoritos,
+          idaEVolta: !!activeTripVal.round_trip,
+        });
+
+        trechosRole = result.trechos;
+        segRows = result.trechos.map((t, i) => ({
+          trip_id: id,
+          order_index: t.ordem,
+          // Rolê é sempre 1 dia (ida e volta no MESMO dia) → day_index 1 para todos,
+          // para data/horário/clima não somarem um dia na volta. A separação visual
+          // Ida/Volta é feita no render (grupos), não pelo day_index.
+          day_index: 1,
+          is_last_of_day: i === result.trechos.length - 1,
+          origin_name: t.origem.nome,
+          destination_name: t.destino.nome,
+          origin_lat: t.origem.lat,
+          origin_lng: t.origem.lng,
+          dest_lat: t.destino.lat,
+          dest_lng: t.destino.lng,
+          distance_km: t.distanciaKm,
+          duration_minutes: t.duracaoMin,
+          route_summary: t.rodovia,
+          has_alert: t.alertas.length > 0,
+          alert_types: t.alertas.length > 0 ? t.alertas : null,
+        }));
+        totals = {
+          total_distance_km: result.totalKm,
+          total_duration_min: result.totalMin,
+          stop_count: Math.max(0, result.trechos.length - 1),
+        };
+      } else {
+        const manualWps: ManualWaypoint[] = overrideWaypoints ?? waypoints.map((w) => ({
+          name: w.name,
+          lat: w.latitude,
+          lng: w.longitude,
+        }));
+        const result = await generateSegments(
+          activeTripVal.origin,
+          activeTripVal.destination,
+          activeTripVal.min_stop_km,
+          activeTripVal.max_stop_km,
+          activeTripVal.num_days,
+          manualWps.length > 0 ? manualWps : undefined,
+          activeTripVal.trip_type
+        );
+
+        if (result.avg_daily_km && result.avg_daily_km > 500) {
+          const isExtremo = (result.avg_daily_km ?? 0) > 650;
+          Alert.alert(
+            isExtremo ? "Expedição muito puxada" : "Ritmo intenso",
+            `Esta expedição terá média de ${result.avg_daily_km} km por dia. Para uma viagem de moto, considere adicionar mais dias ou revisar o ritmo.`,
+            [{ text: "Entendi" }]
+          );
+        }
+
+        segRows = result.segments.map(({ waypoint_lat: _wlat, waypoint_lng: _wlng, ...s }) => ({ ...s, trip_id: id }));
+        totals = {
           total_distance_km: result.total_km,
           total_duration_min: result.total_duration_min,
-          stop_count: stopCount,
-        })
-        .eq("id", id);
+          stop_count: Math.max(0, result.segments.length - 1),
+        };
+      }
+
+      await supabase.from("segments").delete().eq("trip_id", id);
+      await supabase.from("segments").insert(segRows);
+      await supabase.from("trips").update(totals).eq("id", id);
 
       await load();
 
@@ -1293,7 +1395,7 @@ export default function TripDetailScreen() {
       if (freshSegs && freshSegs.length > 0) {
         await Promise.all([
           fetchWeather(freshSegs, activeTripVal.departure_date),
-          fetchStops(freshSegs),
+          trechosRole ? attachRolePostos(freshSegs, trechosRole) : fetchStops(freshSegs),
         ]);
         await load();
       }
@@ -1342,6 +1444,26 @@ export default function TripDetailScreen() {
       }
     });
   }
+
+  const isDayTrip = trip?.trip_type === "day_trip";
+  // Grupos de cards: Rolê ida-e-volta = IDA/VOLTA (corte no destino da viagem, que é o
+  // ponto de retorno); Rolê só ida = um grupo sem rótulo; multi_day = um por dia.
+  type GrupoCards = { label: string | null; segs: Segment[] };
+  const grupos: GrupoCards[] = [];
+  if (isDayTrip && trip?.round_trip) {
+    const turnaround = segments.findIndex((s) => s.destination_name === trip.destination);
+    const cut = turnaround >= 0 ? turnaround + 1 : Math.ceil(segments.length / 2);
+    grupos.push({ label: "IDA", segs: segments.slice(0, cut) });
+    grupos.push({ label: "VOLTA", segs: segments.slice(cut) });
+  } else if (isDayTrip) {
+    grupos.push({ label: null, segs: segments });
+  } else {
+    for (let d = 1; d <= maxDay; d++) {
+      grupos.push({ label: `DIA ${d}`, segs: segments.filter((s) => (s.day_index ?? 1) === d) });
+    }
+  }
+  // No desktop, Ida e Volta (2 cards) ficam lado a lado; no mobile, empilhados.
+  const sideBySide = isDesktop && !!isDayTrip && !!trip?.round_trip && grupos.length === 2;
 
   return (
     <View style={styles.container}>
@@ -1455,19 +1577,22 @@ export default function TripDetailScreen() {
             </Text>
           </View>
         ) : (
-          Array.from({ length: maxDay }, (_, i) => i + 1).map((dayIdx) => {
-            const daySegs = segments.filter((s) => (s.day_index ?? 1) === dayIdx);
+          <View style={sideBySide ? styles.dayCardsRow : undefined}>
+          {grupos.map((grupo, gi) => {
+            const daySegs = grupo.segs;
             if (daySegs.length === 0) return null;
 
+            const dayIdx = gi + 1; // nº do dia (multi_day) / índice do grupo
             const firstSeg = daySegs[0];
             const lastSeg = daySegs[daySegs.length - 1];
             const dayTotalKm = daySegs.reduce((sum, s) => sum + s.distance_km, 0);
-            const dayDate = segmentDate(trip.departure_date, dayIdx);
+            // Rolê: sempre o dia de saída (ida e volta no mesmo dia). Expedição: soma os dias.
+            const dayDate = isDayTrip ? trip.departure_date : segmentDate(trip.departure_date, dayIdx);
 
             return (
-              <View key={dayIdx} style={styles.dayCard}>
+              <View key={gi} style={[styles.dayCard, sideBySide && styles.dayCardHalf]}>
                 <DayHeader
-                  dayIndex={dayIdx}
+                  label={grupo.label}
                   date={dayDate}
                   originName={firstSeg.origin_name ?? ""}
                   destinName={lastSeg.destination_name ?? ""}
@@ -1487,7 +1612,7 @@ export default function TripDetailScreen() {
                   {daySegs.map((seg, segIdx) => {
                     const globalIdx = segments.indexOf(seg);
                     const isLastSeg = globalIdx === segments.length - 1;
-                    const showLodging = seg.is_last_of_day && dayIdx < maxDay;
+                    const showLodging = seg.is_last_of_day && dayIdx < maxDay && !isDayTrip;
                     const wpsAfter = waypoints.filter((w) => w.order_index === globalIdx);
                     const depTime = segmentTimes.get(seg.id) ?? baseTime;
 
@@ -1496,6 +1621,7 @@ export default function TripDetailScreen() {
                         <SegmentCard
                           seg={seg}
                           stop={stops.get(seg.id)}
+                          showDayEnd={!isDayTrip}
                           departureDate={trip.departure_date}
                           departureTime={depTime}
                           onStopPress={() => openStopAlternatives(seg.id)}
@@ -1580,7 +1706,8 @@ export default function TripDetailScreen() {
                 </View>
               </View>
             );
-          })
+          })}
+          </View>
         )}
 
         {/* Action buttons (D8) */}
@@ -1681,7 +1808,10 @@ export default function TripDetailScreen() {
             <Pressable style={styles.modalSheet} onPress={() => {}}>
               <View style={styles.modalHandle} />
               <Text style={styles.modalTitle}>Alternativas de parada</Text>
-              {stopModal?.alternatives.map((alt) => {
+              {stopModal && stopModal.alternatives.length > 0 && (
+                <StopAltMap alternatives={stopModal.alternatives} />
+              )}
+              {stopModal?.alternatives.map((alt, i) => {
                 const delta = altDeltas.get(alt.place_id);
                 const deltaLabel = loadingDeltas
                   ? "..."
@@ -1695,6 +1825,9 @@ export default function TripDetailScreen() {
                 const deltaColor = delta == null || delta === 0 ? "#888" : delta > 0 ? "#D97706" : "#16A34A";
                 return (
                   <View key={alt.place_id} style={[styles.altRow, alt.is_selected && styles.altRowSelected]}>
+                    <View style={[styles.altNum, { backgroundColor: alt.is_selected ? "#16A34A" : "#C97826" }]}>
+                      <Text style={styles.altNumText}>{i + 1}</Text>
+                    </View>
                     <TouchableOpacity
                       style={{ flex: 1 }}
                       onPress={() => selectStopAlternative(stopModal.segId, alt.place_id)}
@@ -2208,6 +2341,8 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 2 },
     elevation: 2,
   },
+  dayCardsRow: { flexDirection: "row", alignItems: "flex-start" },
+  dayCardHalf: { flex: 1 },
   dayAlertBanner: {
     backgroundColor: "#FFF3CD",
     paddingHorizontal: 14,
@@ -2443,6 +2578,8 @@ const styles = StyleSheet.create({
     backgroundColor: "#FEF3E2", borderRadius: 10,
     paddingHorizontal: 10, marginHorizontal: -10, borderBottomColor: "transparent",
   },
+  altNum: { width: 22, height: 22, borderRadius: 11, alignItems: "center", justifyContent: "center" },
+  altNumText: { color: "#fff", fontSize: 11, fontWeight: "700" },
   altName: { fontSize: 14, fontWeight: "600", color: "#1A1A1A" },
   altNameSelected: { color: "#C97826" },
   altMeta: { fontSize: 12, color: "#888" },

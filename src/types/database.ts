@@ -771,6 +771,7 @@ export type Database = {
           origin_lng: number | null
           rating: number | null
           rating_note: string | null
+          round_trip: boolean
           source_trip_id: string | null
           started_at: string | null
           status: string | null
@@ -800,6 +801,7 @@ export type Database = {
           origin_lng?: number | null
           rating?: number | null
           rating_note?: string | null
+          round_trip?: boolean
           source_trip_id?: string | null
           started_at?: string | null
           status?: string | null
@@ -829,6 +831,7 @@ export type Database = {
           origin_lng?: number | null
           rating?: number | null
           rating_note?: string | null
+          round_trip?: boolean
           source_trip_id?: string | null
           started_at?: string | null
           status?: string | null
