@@ -1,6 +1,6 @@
 // Caminhada de km sobre os steps do Directions. É a peça que "faz ou quebra"
 // o primitivo: como acumular distância on-road e projetar um posto de volta à rota.
-import type { Ponto, RawLeg } from './types';
+import type { Ponto, RawLeg, RawStep } from './types';
 import { haversineKm } from './geo';
 
 /** Um step com km/min acumulados desde o início da leg. `end` é sempre on-road. */
@@ -69,4 +69,30 @@ export function kmRodoviarioAte(
     }
   }
   return melhorKm;
+}
+
+/**
+ * Nome da via principal de um conjunto de steps: a rodovia (padrão XX-000) com
+ * mais metros percorridos, extraída das html_instructions. Espelha o
+ * extractMainRoad do generate-segments. Retorna '' se nenhuma for reconhecida.
+ */
+export function rodoviaPrincipal(steps: RawStep[]): string {
+  const metrosPorVia = new Map<string, number>();
+  for (const s of steps) {
+    for (const m of (s.htmlInstructions ?? '').matchAll(/<b>([^<]+)<\/b>/g)) {
+      const nome = m[1].trim();
+      if (/^[A-Z]{2,}-\d{2,}/.test(nome)) {
+        metrosPorVia.set(nome, (metrosPorVia.get(nome) ?? 0) + (s.distanceMeters ?? 0));
+      }
+    }
+  }
+  let melhor = '';
+  let melhorMetros = 0;
+  for (const [via, metros] of metrosPorVia) {
+    if (metros > melhorMetros) {
+      melhor = via;
+      melhorMetros = metros;
+    }
+  }
+  return melhor;
 }
