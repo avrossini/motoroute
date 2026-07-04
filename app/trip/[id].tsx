@@ -1312,7 +1312,7 @@ export default function TripDetailScreen() {
           minStopKm: activeTripVal.min_stop_km,
           maxStopKm: activeTripVal.max_stop_km,
           favoritos,
-          idaEVolta: false, // a sub-opção ida/volta entra na Fatia 2
+          idaEVolta: !!activeTripVal.round_trip,
         });
 
         trechosRole = result.trechos;

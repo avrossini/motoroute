@@ -127,6 +127,7 @@ export default function NovaTripScreen() {
   const [departureDate, setDepartureDate] = useState(today());
   const [departureTime, setDepartureTime] = useState("07:00");
   const [numDays, setNumDays] = useState("1");
+  const [roundTrip, setRoundTrip] = useState(false); // day_trip: só ida (false) / ida e volta (true)
   const [minStopKm, setMinStopKm] = useState("100");
   const [maxStopKm, setMaxStopKm] = useState("200");
   const [saving, setSaving] = useState(false);
@@ -164,6 +165,7 @@ export default function NovaTripScreen() {
         departure_date: departureDate,
         departure_time: departureTime,
         trip_type: tripType,
+        round_trip: tripType === "day_trip" ? roundTrip : false,
         num_days: tripType === "multi_day" ? days : 1,
         min_stop_km: minKm,
         max_stop_km: maxKm,
@@ -213,6 +215,26 @@ export default function NovaTripScreen() {
             <Text style={styles.typeSub}>Vários dias</Text>
           </TouchableOpacity>
         </View>
+
+        {tripType === "day_trip" && (
+          <>
+            <Text style={styles.sectionLabel}>PERCURSO</Text>
+            <View style={styles.segRow}>
+              <TouchableOpacity
+                style={[styles.segOption, !roundTrip && styles.segOptionSelected]}
+                onPress={() => setRoundTrip(false)}
+              >
+                <Text style={[styles.segLabel, !roundTrip && styles.segLabelSelected]}>Só ida</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.segOption, roundTrip && styles.segOptionSelected]}
+                onPress={() => setRoundTrip(true)}
+              >
+                <Text style={[styles.segLabel, roundTrip && styles.segLabelSelected]}>Ida e volta</Text>
+              </TouchableOpacity>
+            </View>
+          </>
+        )}
 
         <Text style={styles.sectionLabel}>INFORMAÇÕES DA VIAGEM</Text>
 
@@ -410,6 +432,20 @@ const styles = StyleSheet.create({
   typeLabel: { fontSize: 14, fontWeight: "700", color: "#555" },
   typeLabelSelected: { color: "#C97826" },
   typeSub: { fontSize: 11, color: "#aaa", marginTop: 2 },
+
+  segRow: { flexDirection: "row", gap: 12, marginTop: 10 },
+  segOption: {
+    flex: 1,
+    backgroundColor: "#fff",
+    borderRadius: 12,
+    paddingVertical: 12,
+    alignItems: "center",
+    borderWidth: 2,
+    borderColor: "#E5E5E5",
+  },
+  segOptionSelected: { borderColor: "#C97826", backgroundColor: "#FEF3E2" },
+  segLabel: { fontSize: 14, fontWeight: "600", color: "#555" },
+  segLabelSelected: { color: "#C97826" },
 
   field: { marginTop: 14 },
   fieldLabel: { fontSize: 12, fontWeight: "600", color: "#555", marginBottom: 6 },
