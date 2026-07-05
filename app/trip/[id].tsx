@@ -246,6 +246,7 @@ function DayHeader({
   destinName,
   totalKm,
   onEditCity,
+  onToggleRest,
 }: {
   label: string | null; // "DIA 1" | "IDA" | "VOLTA" | null (sem badge, ex.: Rolê só ida)
   date: string;
@@ -253,6 +254,7 @@ function DayHeader({
   destinName: string;
   totalKm: number;
   onEditCity?: () => void; // Expedição: trocar a cidade de pernoite do dia
+  onToggleRest?: () => void; // Expedição: marcar o dia como "parado"
 }) {
   const dateLabel = new Date(date + "T00:00:00").toLocaleDateString("pt-BR", {
     day: "2-digit",
@@ -277,6 +279,11 @@ function DayHeader({
         {onEditCity && (
           <TouchableOpacity onPress={onEditCity} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
             <Text style={styles.editCityBtn}>✎ cidade</Text>
+          </TouchableOpacity>
+        )}
+        {onToggleRest && (
+          <TouchableOpacity onPress={onToggleRest} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+            <Text style={styles.editCityBtn}>🛌 parar</Text>
           </TouchableOpacity>
         )}
       </View>
@@ -518,6 +525,7 @@ export default function TripDetailScreen() {
   const [addWpModal, setAddWpModal] = useState<{ segIndex: number; segment: (typeof segments)[0] } | null>(null);
   const [editCityModal, setEditCityModal] = useState<{ dayIndex: number; currentCity: string } | null>(null);
   const [savingCity, setSavingCity] = useState(false);
+  const [togglingRest, setTogglingRest] = useState<number | null>(null);
   const [wpQuery, setWpQuery] = useState("");
   const [wpResults, setWpResults] = useState<GeoResult[]>([]);
   const [wpSearching, setWpSearching] = useState(false);
@@ -1651,6 +1659,91 @@ export default function TripDetailScreen() {
     }
   }
 
+  // Expedição: alterna um dia entre "deslocamento" e "parado". num_days = dias de
+  // calendário; nDias do motor = dias de deslocamento (= num_days − parados). Re-esqueleta
+  // (redistribui as cidades entre os dias de deslocamento; perde trechos gerados e edições
+  // de cidade — é uma reestruturação da viagem). Dia parado herda a cidade do dia anterior.
+  async function toggleRestDay(dayIndex: number) {
+    if (!trip) return;
+    if (trip.status === "active") {
+      Alert.alert("Viagem em andamento", "Não é possível reestruturar os dias com a viagem já iniciada.");
+      return;
+    }
+    if (dayIndex === 1) {
+      Alert.alert("Dia 1", "O primeiro dia não pode ser parado — a viagem começa na origem.");
+      return;
+    }
+    const numDays = trip.num_days ?? 1;
+    const restSet = new Set<number>();
+    for (const [d, td] of tripDays) if (td.is_rest_day) restSet.add(d);
+    if (restSet.has(dayIndex)) restSet.delete(dayIndex);
+    else restSet.add(dayIndex);
+    const travelCal: number[] = [];
+    for (let d = 1; d <= numDays; d++) if (!restSet.has(d)) travelCal.push(d);
+    if (travelCal.length === 0) {
+      Alert.alert("Sem deslocamento", "A expedição precisa de ao menos um dia de deslocamento.");
+      return;
+    }
+
+    setTogglingRest(dayIndex);
+    try {
+      const supabase = getSupabase();
+      const result = await calcularExpedicaoRemota({
+        origem: { lat: Number(trip.origin_lat), lng: Number(trip.origin_lng), nome: trip.origin },
+        destino: { lat: Number(trip.dest_lat), lng: Number(trip.dest_lng), nome: trip.destination },
+        nDias: travelCal.length,
+      });
+
+      const segRows: any[] = [];
+      const tdRows: any[] = [];
+      let lastCity = { nome: trip.origin, lat: Number(trip.origin_lat) as number | null, lng: Number(trip.origin_lng) as number | null, placeId: null as string | null };
+      let k = 0;
+      for (let d = 1; d <= numDays; d++) {
+        if (restSet.has(d)) {
+          // dia parado: herda a cidade do dia de deslocamento anterior, sem segmentos
+          tdRows.push({
+            trip_id: id, day_index: d, is_rest_day: true,
+            city_name: lastCity.nome, city_lat: lastCity.lat, city_lng: lastCity.lng, city_place_id: lastCity.placeId,
+            km_dia: 0, duration_min: 0, alert_types: null, segments_generated: false,
+          });
+        } else {
+          const dia = result.dias[k];
+          k++;
+          segRows.push({
+            trip_id: id, order_index: d * 1000, day_index: d, is_last_of_day: true,
+            origin_name: dia.origem.nome, destination_name: dia.destino.nome,
+            origin_lat: dia.origem.lat, origin_lng: dia.origem.lng, dest_lat: dia.destino.lat, dest_lng: dia.destino.lng,
+            distance_km: dia.kmDia, duration_minutes: dia.duracaoMin, route_summary: null,
+            has_alert: dia.alertas.length > 0, alert_types: dia.alertas.length > 0 ? dia.alertas : null,
+          });
+          tdRows.push({
+            trip_id: id, day_index: d, is_rest_day: false,
+            city_name: dia.cidade?.nome ?? null, city_lat: dia.cidade?.lat ?? null, city_lng: dia.cidade?.lng ?? null, city_place_id: dia.cidade?.placeId ?? null,
+            km_dia: dia.kmDia, duration_min: dia.duracaoMin, alert_types: dia.alertas.length > 0 ? dia.alertas : null, segments_generated: false,
+          });
+          lastCity = { nome: dia.destino.nome, lat: dia.destino.lat, lng: dia.destino.lng, placeId: dia.cidade?.placeId ?? null };
+        }
+      }
+
+      await supabase.from("segments").delete().eq("trip_id", id);
+      await supabase.from("segments").insert(segRows);
+      await supabase.from("trip_days").delete().eq("trip_id", id);
+      await supabase.from("trip_days").insert(tdRows);
+      await supabase.from("trips").update({ total_distance_km: result.totalKm, total_duration_min: result.totalMin, stop_count: 0 }).eq("id", id);
+      await load();
+
+      const { data: freshSegs } = await supabase.from("segments").select("*").eq("trip_id", id).order("order_index", { ascending: true });
+      if (freshSegs && freshSegs.length > 0) {
+        await fetchWeather(freshSegs, trip.departure_date);
+        await load();
+      }
+    } catch (e: any) {
+      Alert.alert("Erro ao alterar o dia", e.message ?? "Tente novamente.");
+    } finally {
+      setTogglingRest(null);
+    }
+  }
+
   const weatherAvailable = trip ? isWeatherAvailable(trip.departure_date) : false;
   const hasWeatherData = segments.some((s) => s.weather_condition != null);
   const anyStale = hasWeatherData && segments.some((s) => isWeatherStale(s.weather_updated_at ?? null));
@@ -1691,9 +1784,12 @@ export default function TripDetailScreen() {
   }
 
   const isDayTrip = trip?.trip_type === "day_trip";
+  // Dias de calendário da Expedição (inclui dias parados, que não têm segmentos).
+  const numDiasCal = !isDayTrip ? (trip.num_days ?? maxDay) : maxDay;
   // Grupos de cards: Rolê ida-e-volta = IDA/VOLTA (corte no destino da viagem, que é o
-  // ponto de retorno); Rolê só ida = um grupo sem rótulo; multi_day = um por dia.
-  type GrupoCards = { label: string | null; segs: Segment[] };
+  // ponto de retorno); Rolê só ida = um grupo sem rótulo; multi_day = um por dia (de
+  // calendário — dias parados entram sem segmentos).
+  type GrupoCards = { label: string | null; segs: Segment[]; isRest?: boolean };
   const grupos: GrupoCards[] = [];
   if (isDayTrip && trip?.round_trip) {
     const turnaround = segments.findIndex((s) => s.destination_name === trip.destination);
@@ -1703,8 +1799,12 @@ export default function TripDetailScreen() {
   } else if (isDayTrip) {
     grupos.push({ label: null, segs: segments });
   } else {
-    for (let d = 1; d <= maxDay; d++) {
-      grupos.push({ label: `DIA ${d}`, segs: segments.filter((s) => (s.day_index ?? 1) === d) });
+    for (let d = 1; d <= numDiasCal; d++) {
+      grupos.push({
+        label: `DIA ${d}`,
+        segs: segments.filter((s) => (s.day_index ?? 1) === d),
+        isRest: !!tripDays.get(d)?.is_rest_day,
+      });
     }
   }
   // No desktop, Ida e Volta (2 cards) ficam lado a lado; no mobile, empilhados.
@@ -1825,9 +1925,51 @@ export default function TripDetailScreen() {
           <View style={sideBySide ? styles.dayCardsRow : undefined}>
           {grupos.map((grupo, gi) => {
             const daySegs = grupo.segs;
+            const dayIdx = gi + 1; // nº do dia (multi_day) / índice do grupo
+
+            // Dia parado (Expedição): sem segmentos, herda a cidade do dia anterior.
+            if (!isDayTrip && grupo.isRest) {
+              const restCity = tripDays.get(dayIdx)?.city_name ?? "";
+              return (
+                <View key={gi} style={styles.dayCard}>
+                  <DayHeader
+                    label={grupo.label}
+                    date={segmentDate(trip.departure_date, dayIdx)}
+                    originName={restCity}
+                    destinName={restCity}
+                    totalKm={0}
+                  />
+                  <View style={styles.restDayBody}>
+                    <Text style={styles.restDayText}>🛌 Dia parado em {restCity || "—"}</Text>
+                    <TouchableOpacity
+                      style={[styles.restToggleBtn, (togglingRest !== null || calculating || trip.status === "active") && { opacity: 0.5 }]}
+                      onPress={() => toggleRestDay(dayIdx)}
+                      disabled={togglingRest !== null || calculating || trip.status === "active"}
+                    >
+                      {togglingRest === dayIdx ? (
+                        <ActivityIndicator color="#C97826" />
+                      ) : (
+                        <Text style={styles.restToggleBtnText}>▶ Voltar a dia de viagem</Text>
+                      )}
+                    </TouchableOpacity>
+                  </View>
+                  {dayIdx < numDiasCal && (
+                    <LodgingBlock
+                      tripId={id}
+                      dayIndex={dayIdx}
+                      departureDate={trip.departure_date}
+                      destCity={restCity}
+                      lodgingItem={lodging.get(dayIdx)}
+                      onReservedToggle={toggleReserved}
+                      onSearchPress={() => openLodgingSearch(dayIdx, restCity)}
+                    />
+                  )}
+                </View>
+              );
+            }
+
             if (daySegs.length === 0) return null;
 
-            const dayIdx = gi + 1; // nº do dia (multi_day) / índice do grupo
             const firstSeg = daySegs[0];
             const lastSeg = daySegs[daySegs.length - 1];
             const dayTotalKm = daySegs.reduce((sum, s) => sum + s.distance_km, 0);
@@ -1846,11 +1988,12 @@ export default function TripDetailScreen() {
                   originName={firstSeg.origin_name ?? ""}
                   destinName={lastSeg.destination_name ?? ""}
                   totalKm={dayTotalKm}
-                  onEditCity={!isDayTrip && dayIdx < maxDay ? () => {
+                  onEditCity={!isDayTrip && dayIdx < numDiasCal ? () => {
                     setEditCityModal({ dayIndex: dayIdx, currentCity: lastSeg.destination_name ?? "" });
                     setWpQuery("");
                     setWpResults([]);
                   } : undefined}
+                  onToggleRest={!isDayTrip && dayIdx > 1 ? () => toggleRestDay(dayIdx) : undefined}
                 />
                 {/* day alert banner — shown when daily distance exceeds 500 km */}
                 {dayTotalKm > 500 && (
@@ -1890,7 +2033,7 @@ export default function TripDetailScreen() {
                             <Text style={styles.daySkelNote}>Gere os trechos antes de iniciar a viagem.</Text>
                           )}
                         </View>
-                        {dayIdx < maxDay && (
+                        {dayIdx < numDiasCal && (
                           <LodgingBlock
                             tripId={id}
                             dayIndex={dayIdx}
@@ -1907,7 +2050,7 @@ export default function TripDetailScreen() {
                   {diaGerado && daySegs.map((seg, segIdx) => {
                     const globalIdx = segments.indexOf(seg);
                     const isLastSeg = globalIdx === segments.length - 1;
-                    const showLodging = seg.is_last_of_day && dayIdx < maxDay && !isDayTrip;
+                    const showLodging = seg.is_last_of_day && dayIdx < numDiasCal && !isDayTrip;
                     const wpsAfter = waypoints.filter((w) => w.order_index === globalIdx);
                     const depTime = segmentTimes.get(seg.id) ?? baseTime;
 
@@ -2763,6 +2906,12 @@ const styles = StyleSheet.create({
   },
   btnGerarDiaText: { color: "#fff", fontSize: 15, fontWeight: "700" },
   daySkelNote: { fontSize: 12, color: "#B45309", textAlign: "center" },
+
+  // Dia parado (rest day)
+  restDayBody: { paddingHorizontal: 16, paddingVertical: 14, alignItems: "center", gap: 10, backgroundColor: "#F9FAFB" },
+  restDayText: { fontSize: 14, color: "#374151", fontWeight: "600" },
+  restToggleBtn: { borderWidth: 1, borderColor: "#C97826", borderRadius: 10, paddingVertical: 9, paddingHorizontal: 18, minHeight: 40, alignItems: "center", justifyContent: "center" },
+  restToggleBtnText: { color: "#C97826", fontSize: 14, fontWeight: "700" },
 
   // Segment card (D2, D3, D11)
   segCard: {
