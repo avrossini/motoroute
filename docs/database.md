@@ -164,6 +164,30 @@ day_index       integer DEFAULT 1         -- qual dia da viagem este trecho pert
 is_last_of_day  boolean DEFAULT false     -- true = último trecho do dia → destino é a hospedagem
 ```
 
+### `trip_days` — decisão de cada DIA da Expedição (Ciclo 2)
+
+Desacopla a decisão do dia (cidade de pernoite editável, dia parado, estado de geração)
+dos `segments` (que continuam sendo os trechos). Chave lógica `(trip_id, day_index)`, um
+registro por dia de calendário. O motor `dividirEmDias` produz o esqueleto (as cidades de
+pernoite); os trechos de cada dia são gerados **sob demanda** pelo Rolê. Ver `route-engine.md §6`.
+```sql
+trip_id            uuid REFERENCES trips(id) ON DELETE CASCADE
+day_index          integer NOT NULL                -- 1..N (dia de calendário)
+is_rest_day        boolean NOT NULL DEFAULT false   -- dia parado: sem deslocamento, herda a cidade do dia anterior
+city_name          text                             -- cidade de pernoite (NULL no último dia = destino do usuário)
+city_lat           double precision                 -- coords da cidade (hospedagem / re-edição)
+city_lng           double precision
+city_place_id      text
+km_dia             numeric(6,1)                     -- cache do esqueleto (km do dia)
+duration_min       integer                          -- cache do esqueleto (min do dia)
+alert_types        text[]                           -- dia_puxado | dia_extremo | sem_cidade
+segments_generated boolean NOT NULL DEFAULT false   -- true após o Rolê gerar os trechos do dia
+created_at         timestamptz DEFAULT now()
+updated_at         timestamptz DEFAULT now()
+PRIMARY KEY (trip_id, day_index)
+```
+RLS: usuário só acessa via `trips.user_id = auth.uid()` (mesmo padrão de `segments`/`waypoints`).
+
 ### `lodging_suggestions` — hospedagem planejada por dia overnight
 ```sql
 id              uuid PRIMARY KEY DEFAULT gen_random_uuid()

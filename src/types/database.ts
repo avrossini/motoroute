@@ -752,6 +752,62 @@ export type Database = {
           },
         ]
       }
+      trip_days: {
+        Row: {
+          alert_types: string[] | null
+          city_lat: number | null
+          city_lng: number | null
+          city_name: string | null
+          city_place_id: string | null
+          created_at: string
+          day_index: number
+          duration_min: number | null
+          is_rest_day: boolean
+          km_dia: number | null
+          segments_generated: boolean
+          trip_id: string
+          updated_at: string
+        }
+        Insert: {
+          alert_types?: string[] | null
+          city_lat?: number | null
+          city_lng?: number | null
+          city_name?: string | null
+          city_place_id?: string | null
+          created_at?: string
+          day_index: number
+          duration_min?: number | null
+          is_rest_day?: boolean
+          km_dia?: number | null
+          segments_generated?: boolean
+          trip_id: string
+          updated_at?: string
+        }
+        Update: {
+          alert_types?: string[] | null
+          city_lat?: number | null
+          city_lng?: number | null
+          city_name?: string | null
+          city_place_id?: string | null
+          created_at?: string
+          day_index?: number
+          duration_min?: number | null
+          is_rest_day?: boolean
+          km_dia?: number | null
+          segments_generated?: boolean
+          trip_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "trip_days_trip_id_fkey"
+            columns: ["trip_id"]
+            isOneToOne: false
+            referencedRelation: "trips"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       trips: {
         Row: {
           completed_at: string | null
