@@ -4,6 +4,6 @@
   "framework": null,
   "rewrites": [
     { "source": "/api/(.*)", "destination": "/api/index.js" },
-    { "source": "/(.*)", "destination": "/api/index.js" }
+    { "source": "/((?!api/|manifest.json|sw.js|.*\\..*).*)", "destination": "/api/index.js" }
   ]
 }

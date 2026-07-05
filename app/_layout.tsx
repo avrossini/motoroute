@@ -69,6 +69,17 @@ export default function RootLayout() {
     }
   }, [ready, isRecovery]);
 
+  // Registra o service worker stub na web (habilita o prompt de instalação do PWA no Android).
+  useEffect(() => {
+    if (
+      Platform.OS === "web" &&
+      typeof navigator !== "undefined" &&
+      "serviceWorker" in navigator
+    ) {
+      navigator.serviceWorker.register("/sw.js").catch(() => {});
+    }
+  }, []);
+
   if (!ready) return null;
 
   return (
