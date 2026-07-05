@@ -20,6 +20,7 @@ import { getSupabase } from "@/services/supabase";
 import { openNavigation } from "@/platform/navigation";
 import { generateSegments, type ManualWaypoint } from "@/services/googleDirections";
 import { calcularRoleRemoto } from "@/services/roleService";
+import { calcularExpedicaoRemota } from "@/services/expedicaoService";
 import type { Trecho } from "@/domain/route/types";
 import { useIsDesktopWeb } from "@/hooks/useIsDesktopWeb";
 import {
@@ -99,6 +100,7 @@ interface GeoResult {
 
 type Trip = Database["public"]["Tables"]["trips"]["Row"];
 type Segment = Database["public"]["Tables"]["segments"]["Row"];
+type TripDay = Database["public"]["Tables"]["trip_days"]["Row"];
 
 const RAIN_ALERT_THRESHOLD = 40;
 const WIND_ALERT_KMH = 50;
@@ -471,6 +473,8 @@ export default function TripDetailScreen() {
   const [fetchingWeather, setFetchingWeather] = useState(false);
   const [stops, setStops] = useState<Map<string, StopSuggestion>>(new Map());
   const [lodging, setLodging] = useState<Map<number, LodgingSuggestion>>(new Map());
+  const [tripDays, setTripDays] = useState<Map<number, TripDay>>(new Map());
+  const [generatingDay, setGeneratingDay] = useState<number | null>(null);
   const [stopModal, setStopModal] = useState<{
     segId: string;
     alternatives: StopAlternative[];
@@ -610,6 +614,16 @@ export default function TripDetailScreen() {
     } else {
       setLodging(new Map());
     }
+
+    // Dias da Expedição (trip_days) — cidade de pernoite, dia parado, estado de geração.
+    const { data: tripDaysData } = await supabase
+      .from("trip_days")
+      .select("*")
+      .eq("trip_id", id)
+      .order("day_index", { ascending: true });
+    const tdMap = new Map<number, TripDay>();
+    for (const td of tripDaysData ?? []) tdMap.set(td.day_index, td);
+    setTripDays(tdMap);
 
     const { data: { user: authUser } } = await supabase.auth.getUser();
     if (authUser) {
@@ -1320,6 +1334,7 @@ export default function TripDetailScreen() {
       let segRows: any[];
       let totals: { total_distance_km: number; total_duration_min: number; stop_count: number };
       let trechosRole: Trecho[] | null = null;
+      let tripDaysRows: any[] | null = null; // Expedição: linhas de trip_days a gravar
 
       if (activeTripVal.trip_type === "day_trip") {
         const { data: { user: authUser } } = await supabase.auth.getUser();
@@ -1364,40 +1379,72 @@ export default function TripDetailScreen() {
           stop_count: Math.max(0, result.trechos.length - 1),
         };
       } else {
-        const manualWps: ManualWaypoint[] = overrideWaypoints ?? waypoints.map((w) => ({
-          name: w.name,
-          lat: w.latitude,
-          lng: w.longitude,
-        }));
-        const result = await generateSegments(
-          activeTripVal.origin,
-          activeTripVal.destination,
-          activeTripVal.min_stop_km,
-          activeTripVal.max_stop_km,
-          activeTripVal.num_days,
-          manualWps.length > 0 ? manualWps : undefined,
-          activeTripVal.trip_type
-        );
+        // Expedição (multi_day): motor novo. Gera só o ESQUELETO de dias — cada
+        // pernoite é uma cidade. Os trechos de cada dia vêm SOB DEMANDA (botão
+        // "Gerar trechos deste dia"). Ver docs/route-engine.md §6.
+        const nDias = activeTripVal.num_days ?? 1;
+        const result = await calcularExpedicaoRemota({
+          origem: { lat: Number(activeTripVal.origin_lat), lng: Number(activeTripVal.origin_lng), nome: activeTripVal.origin },
+          destino: { lat: Number(activeTripVal.dest_lat), lng: Number(activeTripVal.dest_lng), nome: activeTripVal.destination },
+          nDias,
+        });
 
-        if (result.avg_daily_km && result.avg_daily_km > 500) {
-          const isExtremo = (result.avg_daily_km ?? 0) > 650;
+        // Alerta de média diária (business-logic §59) — informativo, não bloqueia.
+        const avgDaily = nDias > 0 ? Math.round(result.totalKm / nDias) : 0;
+        if (avgDaily > 500) {
+          const isExtremo = avgDaily > 650;
           Alert.alert(
             isExtremo ? "Expedição muito puxada" : "Ritmo intenso",
-            `Esta expedição terá média de ${result.avg_daily_km} km por dia. Para uma viagem de moto, considere adicionar mais dias ou revisar o ritmo.`,
+            `Esta expedição terá média de ${avgDaily} km por dia. Para uma viagem de moto, considere adicionar mais dias ou revisar o ritmo.`,
             [{ text: "Entendi" }]
           );
         }
 
-        segRows = result.segments.map(({ waypoint_lat: _wlat, waypoint_lng: _wlng, ...s }) => ({ ...s, trip_id: id }));
+        // 1 segmento placeholder por dia (o "dia" inteiro origem→cidade); order_index
+        // = dia*1000 + trecho, para gerar os trechos de um dia sem renumerar os outros.
+        segRows = result.dias.map((d) => ({
+          trip_id: id,
+          order_index: d.dia * 1000,
+          day_index: d.dia,
+          is_last_of_day: true,
+          origin_name: d.origem.nome,
+          destination_name: d.destino.nome,
+          origin_lat: d.origem.lat,
+          origin_lng: d.origem.lng,
+          dest_lat: d.destino.lat,
+          dest_lng: d.destino.lng,
+          distance_km: d.kmDia,
+          duration_minutes: d.duracaoMin,
+          route_summary: null,
+          has_alert: d.alertas.length > 0,
+          alert_types: d.alertas.length > 0 ? d.alertas : null,
+        }));
+        tripDaysRows = result.dias.map((d) => ({
+          trip_id: id,
+          day_index: d.dia,
+          is_rest_day: false,
+          city_name: d.cidade?.nome ?? null,
+          city_lat: d.cidade?.lat ?? null,
+          city_lng: d.cidade?.lng ?? null,
+          city_place_id: d.cidade?.placeId ?? null,
+          km_dia: d.kmDia,
+          duration_min: d.duracaoMin,
+          alert_types: d.alertas.length > 0 ? d.alertas : null,
+          segments_generated: false,
+        }));
         totals = {
-          total_distance_km: result.total_km,
-          total_duration_min: result.total_duration_min,
-          stop_count: Math.max(0, result.segments.length - 1),
+          total_distance_km: result.totalKm,
+          total_duration_min: result.totalMin,
+          stop_count: 0,
         };
       }
 
       await supabase.from("segments").delete().eq("trip_id", id);
       await supabase.from("segments").insert(segRows);
+      if (tripDaysRows) {
+        await supabase.from("trip_days").delete().eq("trip_id", id);
+        await supabase.from("trip_days").insert(tripDaysRows);
+      }
       await supabase.from("trips").update(totals).eq("id", id);
 
       await load();
@@ -1408,16 +1455,106 @@ export default function TripDetailScreen() {
         .eq("trip_id", id)
         .order("order_index", { ascending: true });
       if (freshSegs && freshSegs.length > 0) {
-        await Promise.all([
-          fetchWeather(freshSegs, activeTripVal.departure_date),
-          trechosRole ? attachRolePostos(freshSegs, trechosRole) : fetchStops(freshSegs),
-        ]);
+        // Esqueleto da Expedição (tripDaysRows): só clima — postos vêm por dia sob demanda.
+        const enrich: Promise<unknown>[] = [fetchWeather(freshSegs, activeTripVal.departure_date)];
+        if (trechosRole) enrich.push(attachRolePostos(freshSegs, trechosRole));
+        else if (!tripDaysRows) enrich.push(fetchStops(freshSegs));
+        await Promise.all(enrich);
         await load();
       }
     } catch (e: any) {
       Alert.alert("Erro ao calcular rota", e.message ?? "Tente novamente.");
     } finally {
       setCalculating(false);
+    }
+  }
+
+  // Expedição: materializa os trechos de UM dia sob demanda (Motor do Rolê, só ida,
+  // origem = início do dia, destino = cidade de pernoite). Substitui o placeholder do
+  // dia pelos trechos reais e grava os postos. Não mexe nos outros dias.
+  async function gerarTrechosDia(dayIndex: number) {
+    if (!trip) return;
+    if (trip.status === "active") {
+      Alert.alert("Viagem em andamento", "Não é possível gerar trechos com a viagem já iniciada.");
+      return;
+    }
+    const daySeg = segments.find((s) => (s.day_index ?? 1) === dayIndex);
+    if (!daySeg) return;
+    setGeneratingDay(dayIndex);
+    try {
+      const supabase = getSupabase();
+      const { data: { user: authUser } } = await supabase.auth.getUser();
+      const { data: favData } = authUser
+        ? await supabase.from("favorites").select("place_id").eq("user_id", authUser.id)
+        : { data: null };
+      const favoritos = (favData ?? []).map((f) => f.place_id);
+
+      const result = await calcularRoleRemoto({
+        origem: { lat: Number(daySeg.origin_lat), lng: Number(daySeg.origin_lng), nome: daySeg.origin_name ?? trip.origin },
+        destino: { lat: Number(daySeg.dest_lat), lng: Number(daySeg.dest_lng), nome: daySeg.destination_name ?? trip.destination },
+        minStopKm: trip.min_stop_km,
+        maxStopKm: trip.max_stop_km,
+        favoritos,
+        idaEVolta: false,
+      });
+
+      const novos = result.trechos.map((t, i) => ({
+        trip_id: id,
+        order_index: dayIndex * 1000 + i,
+        day_index: dayIndex,
+        is_last_of_day: i === result.trechos.length - 1,
+        origin_name: t.origem.nome,
+        destination_name: t.destino.nome,
+        origin_lat: t.origem.lat,
+        origin_lng: t.origem.lng,
+        dest_lat: t.destino.lat,
+        dest_lng: t.destino.lng,
+        distance_km: t.distanciaKm,
+        duration_minutes: t.duracaoMin,
+        route_summary: t.rodovia,
+        has_alert: t.alertas.length > 0,
+        alert_types: t.alertas.length > 0 ? t.alertas : null,
+      }));
+
+      // Substitui os segmentos deste dia (o placeholder ou uma geração anterior).
+      await supabase.from("segments").delete().eq("trip_id", id).eq("day_index", dayIndex);
+      await supabase.from("segments").insert(novos);
+      await supabase.from("trip_days").update({ segments_generated: true }).eq("trip_id", id).eq("day_index", dayIndex);
+
+      // Recalcula os totais da viagem a partir de TODOS os segmentos.
+      const { data: allSegs } = await supabase
+        .from("segments")
+        .select("*")
+        .eq("trip_id", id)
+        .order("order_index", { ascending: true });
+      const segs = allSegs ?? [];
+      const nDays = segs.length > 0 ? Math.max(...segs.map((s) => s.day_index ?? 1)) : (trip.num_days ?? 1);
+      await supabase.from("trips").update({
+        total_distance_km: Math.round(segs.reduce((s, x) => s + (x.distance_km ?? 0), 0)),
+        total_duration_min: segs.reduce((s, x) => s + (x.duration_minutes ?? 0), 0),
+        stop_count: Math.max(0, segs.length - nDays),
+      }).eq("id", id);
+
+      await load();
+
+      // Postos + clima só nos trechos deste dia.
+      const { data: diaSegs } = await supabase
+        .from("segments")
+        .select("*")
+        .eq("trip_id", id)
+        .eq("day_index", dayIndex)
+        .order("order_index", { ascending: true });
+      if (diaSegs && diaSegs.length > 0) {
+        await Promise.all([
+          attachRolePostos(diaSegs, result.trechos),
+          fetchWeather(diaSegs, trip.departure_date),
+        ]);
+        await load();
+      }
+    } catch (e: any) {
+      Alert.alert("Erro ao gerar trechos", e.message ?? "Tente novamente.");
+    } finally {
+      setGeneratingDay(null);
     }
   }
 
@@ -1603,6 +1740,10 @@ export default function TripDetailScreen() {
             const dayTotalKm = daySegs.reduce((sum, s) => sum + s.distance_km, 0);
             // Rolê: sempre o dia de saída (ida e volta no mesmo dia). Expedição: soma os dias.
             const dayDate = isDayTrip ? trip.departure_date : segmentDate(trip.departure_date, dayIdx);
+            // "Gerado" = mostra os trechos. Esqueleto (botão gerar) só quando há uma linha
+            // trip_days do dia com segments_generated=false. day_trip e multi_day antigo
+            // (sem trip_days) contam como gerados — não regride viagens já calculadas.
+            const diaGerado = isDayTrip || !tripDays.has(dayIdx) || !!tripDays.get(dayIdx)?.segments_generated;
 
             return (
               <View key={gi} style={[styles.dayCard, sideBySide && styles.dayCardHalf]}>
@@ -1624,7 +1765,48 @@ export default function TripDetailScreen() {
                   </View>
                 )}
                 <View style={styles.dayBody}>
-                  {daySegs.map((seg, segIdx) => {
+                  {!diaGerado && (() => {
+                    // Esqueleto do dia (Expedição): trechos ainda não gerados.
+                    const skel = daySegs[0];
+                    return (
+                      <View key="skel">
+                        {skel.alert_types?.includes("sem_cidade") && (
+                          <Text style={styles.pernoiteWarning}>
+                            ⚠️ Fim de dia sem cidade confirmada — confirme o local de pernoite
+                          </Text>
+                        )}
+                        <View style={styles.daySkeleton}>
+                          <Text style={styles.daySkelHint}>Trechos e postos ainda não detalhados</Text>
+                          <TouchableOpacity
+                            style={[styles.btnGerarDia, (generatingDay !== null || calculating || trip.status === "active") && { opacity: 0.5 }]}
+                            onPress={() => gerarTrechosDia(dayIdx)}
+                            disabled={generatingDay !== null || calculating || trip.status === "active"}
+                          >
+                            {generatingDay === dayIdx ? (
+                              <ActivityIndicator color="#fff" />
+                            ) : (
+                              <Text style={styles.btnGerarDiaText}>⚙ Gerar trechos deste dia</Text>
+                            )}
+                          </TouchableOpacity>
+                          {trip.status === "active" && (
+                            <Text style={styles.daySkelNote}>Gere os trechos antes de iniciar a viagem.</Text>
+                          )}
+                        </View>
+                        {dayIdx < maxDay && (
+                          <LodgingBlock
+                            tripId={id}
+                            dayIndex={dayIdx}
+                            departureDate={trip.departure_date}
+                            destCity={skel.destination_name ?? ""}
+                            lodgingItem={lodging.get(dayIdx)}
+                            onReservedToggle={toggleReserved}
+                            onSearchPress={() => openLodgingSearch(dayIdx, skel.destination_name ?? "")}
+                          />
+                        )}
+                      </View>
+                    );
+                  })()}
+                  {diaGerado && daySegs.map((seg, segIdx) => {
                     const globalIdx = segments.indexOf(seg);
                     const isLastSeg = globalIdx === segments.length - 1;
                     const showLodging = seg.is_last_of_day && dayIdx < maxDay && !isDayTrip;
@@ -1640,11 +1822,11 @@ export default function TripDetailScreen() {
                           departureDate={trip.departure_date}
                           departureTime={depTime}
                           onStopPress={() => openStopAlternatives(seg.id)}
-                          onAddPress={() => {
+                          onAddPress={isDayTrip ? () => {
                             setAddWpModal({ segIndex: globalIdx, segment: seg });
                             setWpQuery("");
                             setWpResults([]);
-                          }}
+                          } : undefined}
                           onNavigatePress={() => handleNavigate(seg)}
                         />
                         {wpsAfter.length > 0 && (
@@ -1682,7 +1864,7 @@ export default function TripDetailScreen() {
                             ))}
                           </View>
                         )}
-                        {segIdx < daySegs.length - 1 && (
+                        {isDayTrip && segIdx < daySegs.length - 1 && (
                           <TouchableOpacity
                             style={styles.mergeStopBtn}
                             onPress={() => openMergeModal(seg, daySegs[segIdx + 1])}
@@ -2404,6 +2586,22 @@ const styles = StyleSheet.create({
   dayDate: { fontSize: 10, color: "#aaa", marginTop: 1 },
   dayKm: { fontSize: 13, fontWeight: "700", color: "#C97826" },
   dayBody: { backgroundColor: "#fff" },
+
+  // Esqueleto de dia da Expedição (trechos ainda não gerados)
+  daySkeleton: { paddingHorizontal: 16, paddingVertical: 14, alignItems: "center", gap: 10 },
+  daySkelHint: { fontSize: 13, color: "#6B7280" },
+  btnGerarDia: {
+    backgroundColor: "#C97826",
+    borderRadius: 10,
+    paddingVertical: 11,
+    paddingHorizontal: 20,
+    alignSelf: "stretch",
+    alignItems: "center",
+    justifyContent: "center",
+    minHeight: 44,
+  },
+  btnGerarDiaText: { color: "#fff", fontSize: 15, fontWeight: "700" },
+  daySkelNote: { fontSize: 12, color: "#B45309", textAlign: "center" },
 
   // Segment card (D2, D3, D11)
   segCard: {
