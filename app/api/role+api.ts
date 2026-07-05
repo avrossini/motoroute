@@ -8,7 +8,8 @@ import { logError } from "@/lib/logError";
 
 export async function POST(request: Request): Promise<Response> {
   const start = Date.now();
-  const { origem, destino, minStopKm, maxStopKm, favoritos, idaEVolta } = await request.json();
+  const { origem, destino, minStopKm, maxStopKm, favoritos, idaEVolta, paradasObrigatorias } =
+    await request.json();
 
   if (!origem || !destino || minStopKm == null || maxStopKm == null) {
     return Response.json(
@@ -25,6 +26,7 @@ export async function POST(request: Request): Promise<Response> {
         faixa: { min: minStopKm, max: maxStopKm },
         favoritos: new Set<string>(favoritos ?? []),
         idaEVolta: !!idaEVolta,
+        paradasObrigatorias: paradasObrigatorias ?? undefined,
       },
       googleRoutePort,
       googleStopsPort

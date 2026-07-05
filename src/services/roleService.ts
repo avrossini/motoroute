@@ -1,5 +1,6 @@
 // Wrapper de frontend do motor do Rolê — chama /api/role.
 import type { RoleResult } from "@/domain/route/calcularRole";
+import type { ParadaObrigatoria } from "@/domain/route/types";
 
 export interface RoleParams {
   origem: { lat: number; lng: number; nome: string };
@@ -8,6 +9,8 @@ export interface RoleParams {
   maxStopKm: number;
   favoritos: string[];
   idaEVolta?: boolean;
+  /** Paradas obrigatórias na ida (a Expedição passa as paradas do dia ao gerar trechos). */
+  paradasObrigatorias?: ParadaObrigatoria[];
 }
 
 export async function calcularRoleRemoto(p: RoleParams): Promise<RoleResult> {
