@@ -1,7 +1,7 @@
 // Harness de teste compartilhado (NÃO é uma suíte — fica fora de __tests__).
 // Rota reta determinística onde 1 km ao longo da rota ≈ 1 km em linha reta, então
 // o raio de busca mapeia direto para km ao longo da rota. Fakes das portas.
-import type { Ponto, PontoNomeado, Posto, RawStep, RawLeg, RawDirections, RoutePort, StopsPort } from './types';
+import type { Ponto, PontoNomeado, Posto, Cidade, RawStep, RawLeg, RawDirections, RoutePort, StopsPort, CitiesPort } from './types';
 import { haversineKm } from './geo';
 
 const LAT = -20;
@@ -106,4 +106,46 @@ export const input = (totalKm: number, min: number, max: number, favoritos: stri
   destino: { ...pontoNoKm(totalKm), nome: 'Destino' } as PontoNomeado,
   faixa: { min, max },
   favoritos: new Set(favoritos),
+});
+
+// ── Expedição ────────────────────────────────────────────────────────────────
+
+const KM_POR_GRAU_LAT = (6371 * Math.PI) / 180; // ~111.19 km/grau de latitude
+/** Ponto no km da rota, deslocado `offKm` lateralmente (para testar desvio da rota). */
+const pontoOffRota = (km: number, offKm: number): Ponto => ({
+  lat: LAT + offKm / KM_POR_GRAU_LAT,
+  lng: lngNoKm(km),
+});
+
+export interface CidadeDef {
+  km: number;
+  nome: string;
+  offKm?: number; // desvio lateral da rota (default 0 = sobre a rota)
+}
+
+export class FakeCities implements CitiesPort {
+  public chamadas = 0;
+  private cidades: (Cidade & { km: number })[];
+  constructor(defs: CidadeDef[]) {
+    this.cidades = defs.map((d) => ({
+      placeId: d.nome,
+      nome: d.nome,
+      ...pontoOffRota(d.km, d.offKm ?? 0),
+      km: d.km,
+    }));
+  }
+  async searchCities(lat: number, lng: number, raioM: number): Promise<Cidade[]> {
+    this.chamadas++;
+    const centro = { lat, lng };
+    return this.cidades
+      .filter((c) => haversineKm({ lat: c.lat, lng: c.lng }, centro) * 1000 <= raioM + 1)
+      .map(({ km: _km, ...c }) => c);
+  }
+}
+
+/** Monta um DividirEmDiasInput com origem no km 0 e destino no km `totalKm`. */
+export const inputDias = (totalKm: number, nDias: number) => ({
+  origem: { ...pontoNoKm(0), nome: 'Origem' } as PontoNomeado,
+  destino: { ...pontoNoKm(totalKm), nome: 'Destino' } as PontoNomeado,
+  nDias,
 });

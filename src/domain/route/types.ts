@@ -97,3 +97,46 @@ export interface RoutePort {
 export interface StopsPort {
   searchStops(lat: number, lng: number, raioM: number): Promise<Posto[]>;
 }
+
+// ── Expedição (multi_day) — divisão em dias ──────────────────────────────────
+
+/** Cidade (locality) real perto da rota — candidata a pernoite. */
+export interface Cidade {
+  placeId: string | null; // null quando vem de reverse-geocode sem place_id confiável
+  nome: string;
+  lat: number;
+  lng: number;
+}
+
+/** Porta de busca de cidades (locality) perto de um ponto. Espelha StopsPort. */
+export interface CitiesPort {
+  searchCities(lat: number, lng: number, raioM: number): Promise<Cidade[]>;
+}
+
+export type AlertaDia =
+  | 'dia_puxado' // 500 < kmDia <= 650 — alerta informativo
+  | 'dia_extremo' // kmDia > 650 — alerta forte
+  | 'sem_cidade'; // nenhuma cidade na janela: deslizou p/ a mais próxima (ou "a confirmar")
+
+/** Uma perna de dia da Expedição: origem → cidade de pernoite. SEM trechos internos. */
+export interface DiaExpedicao {
+  dia: number; // 1..N
+  origem: PontoNomeado;
+  destino: PontoNomeado; // cidade de pernoite, ou o destino final no último dia
+  cidade: Cidade | null; // locality escolhida; null no último dia (é o destino do usuário)
+  kmDia: number;
+  duracaoMin: number;
+  alertas: AlertaDia[];
+}
+
+export interface DividirEmDiasInput {
+  origem: PontoNomeado;
+  destino: PontoNomeado;
+  nDias: number; // dias de DESLOCAMENTO (dias parados são overlay do Ciclo 2)
+}
+
+export interface DividirEmDiasResult {
+  dias: DiaExpedicao[]; // length === nDias
+  totalKm: number;
+  totalMin: number;
+}
