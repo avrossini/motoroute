@@ -245,12 +245,14 @@ function DayHeader({
   originName,
   destinName,
   totalKm,
+  onEditCity,
 }: {
   label: string | null; // "DIA 1" | "IDA" | "VOLTA" | null (sem badge, ex.: Rolê só ida)
   date: string;
   originName: string;
   destinName: string;
   totalKm: number;
+  onEditCity?: () => void; // Expedição: trocar a cidade de pernoite do dia
 }) {
   const dateLabel = new Date(date + "T00:00:00").toLocaleDateString("pt-BR", {
     day: "2-digit",
@@ -270,7 +272,14 @@ function DayHeader({
         </Text>
         <Text style={styles.dayDate}>{dateLabel}</Text>
       </View>
-      <Text style={styles.dayKm}>{Math.round(totalKm)}km</Text>
+      <View style={styles.dayHeaderRight}>
+        <Text style={styles.dayKm}>{Math.round(totalKm)}km</Text>
+        {onEditCity && (
+          <TouchableOpacity onPress={onEditCity} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+            <Text style={styles.editCityBtn}>✎ cidade</Text>
+          </TouchableOpacity>
+        )}
+      </View>
     </View>
   );
 }
@@ -507,6 +516,8 @@ export default function TripDetailScreen() {
   const [selectingStop, setSelectingStop] = useState<string | null>(null);
   const [waypoints, setWaypoints] = useState<Waypoint[]>([]);
   const [addWpModal, setAddWpModal] = useState<{ segIndex: number; segment: (typeof segments)[0] } | null>(null);
+  const [editCityModal, setEditCityModal] = useState<{ dayIndex: number; currentCity: string } | null>(null);
+  const [savingCity, setSavingCity] = useState(false);
   const [wpQuery, setWpQuery] = useState("");
   const [wpResults, setWpResults] = useState<GeoResult[]>([]);
   const [wpSearching, setWpSearching] = useState(false);
@@ -1558,6 +1569,88 @@ export default function TripDetailScreen() {
     }
   }
 
+  // Expedição: troca a cidade de pernoite de um dia. Atualiza o dia D (destino) e o
+  // dia D+1 (origem), reverte ambos a placeholder (trechos ficam obsoletos → regerar)
+  // e recomputa os km via directions-simple. Não mexe nos outros dias.
+  async function editarCidadeDia(geo: GeoResult) {
+    if (!editCityModal || !trip) return;
+    const D = editCityModal.dayIndex;
+    const cityPlaceId = (geo as any).place_id ?? null;
+    setSavingCity(true);
+    try {
+      const supabase = getSupabase();
+      const dir = (oLat: number, oLng: number, dLat: number, dLng: number) =>
+        fetch(`/api/directions-simple?origin_lat=${oLat}&origin_lng=${oLng}&dest_lat=${dLat}&dest_lng=${dLng}`).then((r) => r.json());
+
+      const dSegs = segments
+        .filter((s) => (s.day_index ?? 1) === D)
+        .sort((a, b) => (a.order_index ?? 0) - (b.order_index ?? 0));
+      if (dSegs.length === 0) return;
+      const origemD = {
+        lat: Number(dSegs[0].origin_lat),
+        lng: Number(dSegs[0].origin_lng),
+        nome: dSegs[0].origin_name ?? trip.origin,
+      };
+
+      // Dia D: origem do dia → nova cidade
+      const r1 = await dir(origemD.lat, origemD.lng, geo.lat, geo.lng);
+      await supabase.from("segments").delete().eq("trip_id", id).eq("day_index", D);
+      await supabase.from("segments").insert([{
+        trip_id: id, order_index: D * 1000, day_index: D, is_last_of_day: true,
+        origin_name: origemD.nome, destination_name: geo.name,
+        origin_lat: origemD.lat, origin_lng: origemD.lng, dest_lat: geo.lat, dest_lng: geo.lng,
+        distance_km: r1.distance_km ?? 0, duration_minutes: r1.duration_min ?? 0,
+        route_summary: null, has_alert: false, alert_types: null,
+      }]);
+      await supabase.from("trip_days").update({
+        city_name: geo.name, city_lat: geo.lat, city_lng: geo.lng, city_place_id: cityPlaceId,
+        km_dia: r1.distance_km ?? null, duration_min: r1.duration_min ?? null,
+        alert_types: null, segments_generated: false,
+      }).eq("trip_id", id).eq("day_index", D);
+
+      // Dia D+1 (se houver): nova cidade → destino do dia D+1
+      const d1Segs = segments
+        .filter((s) => (s.day_index ?? 1) === D + 1)
+        .sort((a, b) => (a.order_index ?? 0) - (b.order_index ?? 0));
+      if (d1Segs.length > 0) {
+        const last = d1Segs[d1Segs.length - 1];
+        const destD1 = { lat: Number(last.dest_lat), lng: Number(last.dest_lng), nome: last.destination_name ?? trip.destination };
+        const r2 = await dir(geo.lat, geo.lng, destD1.lat, destD1.lng);
+        await supabase.from("segments").delete().eq("trip_id", id).eq("day_index", D + 1);
+        await supabase.from("segments").insert([{
+          trip_id: id, order_index: (D + 1) * 1000, day_index: D + 1, is_last_of_day: true,
+          origin_name: geo.name, destination_name: destD1.nome,
+          origin_lat: geo.lat, origin_lng: geo.lng, dest_lat: destD1.lat, dest_lng: destD1.lng,
+          distance_km: r2.distance_km ?? 0, duration_minutes: r2.duration_min ?? 0,
+          route_summary: null, has_alert: false, alert_types: null,
+        }]);
+        await supabase.from("trip_days").update({
+          km_dia: r2.distance_km ?? null, duration_min: r2.duration_min ?? null, segments_generated: false,
+        }).eq("trip_id", id).eq("day_index", D + 1);
+      }
+
+      // Totais
+      const { data: allSegs } = await supabase.from("segments").select("distance_km,duration_minutes,day_index").eq("trip_id", id);
+      if (allSegs) {
+        const nd = allSegs.length > 0 ? Math.max(...allSegs.map((s) => s.day_index ?? 1)) : (trip.num_days ?? 1);
+        await supabase.from("trips").update({
+          total_distance_km: Math.round(allSegs.reduce((s, r) => s + Number(r.distance_km), 0)),
+          total_duration_min: allSegs.reduce((s, r) => s + Number(r.duration_minutes), 0),
+          stop_count: Math.max(0, allSegs.length - nd),
+        }).eq("id", id);
+      }
+
+      setEditCityModal(null);
+      setWpQuery("");
+      setWpResults([]);
+      await load();
+    } catch (e: any) {
+      Alert.alert("Erro ao editar cidade", e.message ?? "Tente novamente.");
+    } finally {
+      setSavingCity(false);
+    }
+  }
+
   const weatherAvailable = trip ? isWeatherAvailable(trip.departure_date) : false;
   const hasWeatherData = segments.some((s) => s.weather_condition != null);
   const anyStale = hasWeatherData && segments.some((s) => isWeatherStale(s.weather_updated_at ?? null));
@@ -1753,6 +1846,11 @@ export default function TripDetailScreen() {
                   originName={firstSeg.origin_name ?? ""}
                   destinName={lastSeg.destination_name ?? ""}
                   totalKm={dayTotalKm}
+                  onEditCity={!isDayTrip && dayIdx < maxDay ? () => {
+                    setEditCityModal({ dayIndex: dayIdx, currentCity: lastSeg.destination_name ?? "" });
+                    setWpQuery("");
+                    setWpResults([]);
+                  } : undefined}
                 />
                 {/* day alert banner — shown when daily distance exceeds 500 km */}
                 {dayTotalKm > 500 && (
@@ -2349,6 +2447,66 @@ export default function TripDetailScreen() {
           </Pressable>
         </Modal>
 
+        {/* Editar cidade de pernoite (Expedição) */}
+        <Modal
+          visible={editCityModal != null}
+          transparent
+          animationType="slide"
+          onRequestClose={() => setEditCityModal(null)}
+        >
+          <Pressable style={styles.modalOverlay} onPress={() => !savingCity && setEditCityModal(null)}>
+            <Pressable style={styles.modalSheet} onPress={() => {}}>
+              <View style={styles.modalHandle} />
+              <Text style={styles.modalTitle}>Cidade de pernoite</Text>
+              {editCityModal && (
+                <Text style={styles.editCitySub}>
+                  Dia {editCityModal.dayIndex} — atual: {editCityModal.currentCity || "—"}. Trocar refaz os km
+                  deste dia e do seguinte; os trechos já gerados desses dias precisarão ser regerados.
+                </Text>
+              )}
+              <View style={styles.wpSearchRow}>
+                <TextInput
+                  style={styles.wpSearchInput}
+                  value={wpQuery}
+                  onChangeText={setWpQuery}
+                  placeholder="Buscar cidade"
+                  placeholderTextColor="#aaa"
+                  onSubmitEditing={() => searchWaypoint(wpQuery)}
+                  returnKeyType="search"
+                  autoFocus
+                  editable={!savingCity}
+                />
+                <TouchableOpacity style={styles.wpSearchBtn} onPress={() => searchWaypoint(wpQuery)} disabled={wpSearching || savingCity}>
+                  {wpSearching ? <ActivityIndicator color="#fff" size="small" /> : <Text style={styles.wpSearchBtnText}>Buscar</Text>}
+                </TouchableOpacity>
+              </View>
+              {savingCity ? (
+                <View style={{ paddingVertical: 16, alignItems: "center", gap: 6 }}>
+                  <ActivityIndicator color="#C97826" />
+                  <Text style={styles.modalCancelText}>Recalculando os dias afetados…</Text>
+                </View>
+              ) : (
+                <>
+                  {wpResults.map((r, idx) => (
+                    <TouchableOpacity key={idx} style={styles.altRow} onPress={() => editarCidadeDia(r)}>
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.altName} numberOfLines={1}>🏙 {r.name}</Text>
+                        <Text style={styles.altMeta} numberOfLines={1}>{r.address}</Text>
+                      </View>
+                    </TouchableOpacity>
+                  ))}
+                  {wpResults.length === 0 && !wpSearching && wpQuery.trim().length > 0 && (
+                    <Text style={styles.modalCancelText}>Nenhum resultado. Tente outro nome.</Text>
+                  )}
+                </>
+              )}
+              <TouchableOpacity style={styles.modalCancelBtn} onPress={() => setEditCityModal(null)} disabled={savingCity}>
+                <Text style={styles.modalCancelText}>Fechar</Text>
+              </TouchableOpacity>
+            </Pressable>
+          </Pressable>
+        </Modal>
+
         {/* Stop insertion impact preview modal — Phase 4 */}
         <Modal
           visible={wpPending != null}
@@ -2584,7 +2742,10 @@ const styles = StyleSheet.create({
   dayBadgeText: { fontSize: 10, fontWeight: "700", color: "#fff" },
   dayRoute: { fontSize: 13, fontWeight: "700", color: "#fff" },
   dayDate: { fontSize: 10, color: "#aaa", marginTop: 1 },
+  dayHeaderRight: { alignItems: "flex-end", gap: 4 },
   dayKm: { fontSize: 13, fontWeight: "700", color: "#C97826" },
+  editCityBtn: { fontSize: 11, color: "#2563EB", fontWeight: "600" },
+  editCitySub: { fontSize: 12, color: "#6B7280", marginBottom: 8, lineHeight: 16 },
   dayBody: { backgroundColor: "#fff" },
 
   // Esqueleto de dia da Expedição (trechos ainda não gerados)
