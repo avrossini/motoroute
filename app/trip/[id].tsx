@@ -108,6 +108,10 @@ const ALERT_LABELS: Record<string, string> = {
   trecho_curto: "Trecho curto",
   chuva_forte: "Chuva provável",
   vento_forte: "Vento forte",
+  // Alertas de DIA da Expedição (motor dividirEmDias) — informativos, não bloqueiam.
+  dia_puxado: "Dia puxado",
+  dia_extremo: "Dia intenso",
+  sem_cidade: "Fim de dia sem cidade",
 };
 
 const ALERT_CHIP_BG: Record<string, string> = {
@@ -115,12 +119,18 @@ const ALERT_CHIP_BG: Record<string, string> = {
   vento_forte: "#FFF3E0",
   trecho_longo: "#FEF3C7",
   trecho_curto: "#FEF3C7",
+  dia_puxado: "#FEF3C7",
+  dia_extremo: "#FEE2E2",
+  sem_cidade: "#FEF3C7",
 };
 const ALERT_CHIP_COLOR: Record<string, string> = {
   chuva_forte: "#1565C0",
   vento_forte: "#E65100",
   trecho_longo: "#B45309",
   trecho_curto: "#B45309",
+  dia_puxado: "#B45309",
+  dia_extremo: "#EF4444",
+  sem_cidade: "#B45309",
 };
 
 function formatDate(date: string) {
@@ -704,7 +714,12 @@ export default function TripDetailScreen() {
           const weather = await fetchSegmentWeather(seg.dest_lat, seg.dest_lng, date);
 
           const routeAlerts = ((seg.alert_types as string[] | null) ?? []).filter(
-            (a) => a === "trecho_longo" || a === "trecho_curto"
+            (a) =>
+              a === "trecho_longo" ||
+              a === "trecho_curto" ||
+              a === "dia_puxado" ||
+              a === "dia_extremo" ||
+              a === "sem_cidade"
           );
           const weatherAlerts: string[] = [];
           if (weather.rain_pct >= RAIN_ALERT_THRESHOLD) weatherAlerts.push("chuva_forte");
