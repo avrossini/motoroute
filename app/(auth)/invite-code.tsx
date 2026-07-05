@@ -9,10 +9,12 @@ import {
   KeyboardAvoidingView,
   Platform,
 } from "react-native";
-import { router } from "expo-router";
+import { router, useLocalSearchParams } from "expo-router";
 
 export default function InviteCodeScreen() {
-  const [code, setCode] = useState("");
+  // Código pode vir pré-preenchido pelo link do email de convite (?code=XXXX)
+  const { code: codeParam } = useLocalSearchParams<{ code?: string }>();
+  const [code, setCode] = useState((codeParam ?? "").toUpperCase());
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
