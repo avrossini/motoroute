@@ -1,5 +1,6 @@
 import { fromGoogleDirections } from '../googleRoutePort';
 import { fromGooglePlaces } from '../googleStopsPort';
+import { fromGoogleGeocode } from '../googleCitiesPort';
 
 describe('fromGoogleDirections', () => {
   test('mapeia status, summary, legs e steps', () => {
@@ -57,5 +58,32 @@ describe('fromGooglePlaces', () => {
 
   test('status de erro lança', () => {
     expect(() => fromGooglePlaces({ status: 'REQUEST_DENIED' })).toThrow('REQUEST_DENIED');
+  });
+});
+
+describe('fromGoogleGeocode', () => {
+  test('extrai a locality (nome + coords + place_id)', () => {
+    const json = {
+      status: 'OK',
+      results: [
+        { types: ['route'], address_components: [{ types: ['route'], long_name: 'BR-116' }], geometry: { location: { lat: -24.1, lng: -47.0 } } },
+        { types: ['locality', 'political'], place_id: 'CID1', address_components: [{ types: ['locality', 'political'], long_name: 'Registro' }], geometry: { location: { lat: -24.4877, lng: -47.8442 } } },
+      ],
+    };
+    expect(fromGoogleGeocode(json)).toMatchObject({ placeId: 'CID1', nome: 'Registro', lat: -24.4877, lng: -47.8442 });
+  });
+
+  test('sem locality → cai no município (administrative_area_level_2)', () => {
+    const json = {
+      status: 'OK',
+      results: [
+        { types: ['administrative_area_level_2', 'political'], place_id: 'MUN1', address_components: [{ types: ['administrative_area_level_2', 'political'], long_name: 'Cajati' }], geometry: { location: { lat: -24.7, lng: -48.1 } } },
+      ],
+    };
+    expect(fromGoogleGeocode(json)?.nome).toBe('Cajati');
+  });
+
+  test('ZERO_RESULTS → null', () => {
+    expect(fromGoogleGeocode({ status: 'ZERO_RESULTS', results: [] })).toBeNull();
   });
 });

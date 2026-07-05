@@ -216,23 +216,26 @@ Sub-opção ida/volta persistida em `trips.round_trip`. Nome do trecho = **cidad
 
 ## 6. Motor da Expedição (`multi_day`)
 
-> 🚧 **NÃO IMPLEMENTADA (2026-07-04).** O `multi_day` ainda usa o motor antigo
-> `generate-segments`. Falta a **"caixa" de divisão em dias** abaixo — que o usuário vai
-> detalhar. A arquitetura já está pronta para recebê-la como passo plugável, reusando o
-> Motor do Rolê por dia, sem mexer no que está em produção.
+> **Estado (2026-07-04):** o **Ciclo 1 está feito** — o motor `dividirEmDias`
+> (`src/domain/route/dividirEmDias.ts`) + `CitiesPort`/`googleCitiesPort` + testes-ouro +
+> smoke ao vivo, **dormente** (nada no app o importa ainda). Falta o **Ciclo 2**: plugar no
+> `multi_day`, a UI (editar cidade do dia, dia parado, gerar trechos sob demanda) e remover
+> o `generate-segments`. Até lá o `multi_day` segue no motor antigo.
 
 Dois passos:
 
-1. **Dividir em dias** — decide as cidades de pernoite que fecham cada dia, produzindo
-   as "pernas de dia" `[O→C1, C1→C2, …, Cn→D]`. Aqui moram a **meta de km/dia**
-   (`business-logic.md → ### Distância diária recomendada`) e a **escolha da cidade**
-   (`### Destino final de cada dia deve ser uma cidade`).
-   > ⚠️ **A definir.** O algoritmo interno desta "caixa" ainda será detalhado. Ela é
-   > **plugável**: tem contrato claro (`origem, destino, nº de dias, min/max` →
-   > lista de pernas de dia) e não afeta o resto da arquitetura.
-2. **Roteiro interno do dia** — para cada perna de dia, chamar o **Motor do Rolê (só
-   ida)**. O último trecho do dia termina na cidade `Cx`, que vira o ponto de
-   pernoite/hospedagem (`is_last_of_day = true`).
+1. **Dividir em dias** (`dividirEmDias(origem, destino, nDias)`) — decide só as **cidades
+   de pernoite** que fecham cada dia. **Buscar-primeiro, escala acima:** rota base
+   (Directions) → alvo `total÷N` → por dia, **greedy com re-âncora** (`alvo = kmRestante ÷
+   diasRestantes`, para os dias ficarem o mais iguais possível), escolhendo a **cidade**
+   mais perto do alvo **e** de menor desvio da rota (`cidadeScoring`). A cidade vem do
+   `CitiesPort` (reverse-geocode + anel — `type=locality` não existe no Places Nearby).
+   Sem cidade na janela → amplia o raio → desliza → alerta `sem_cidade`. Alertas
+   `dia_puxado`/`dia_extremo` por km/dia. Reusa `routeWalk` (mesmo caminho/amostragem do
+   primitivo). N = dias de deslocamento; dias parados são overlay do Ciclo 2.
+2. **Roteiro interno do dia** — para cada perna de dia, chamar o **Motor do Rolê (só ida)**,
+   **rodado sob demanda** (não na geração — o usuário ajusta as cidades antes). O último
+   trecho do dia termina na cidade `Cx`, que vira o pernoite/hospedagem.
 
 Regras a honrar na divisão: paradas obrigatórias do usuário têm precedência; dias
 parados (sem deslocamento) mantêm a cidade do dia anterior.
@@ -308,7 +311,7 @@ Fluxo de entrega (fim a fim): dev → build de produção local → PR → deplo
 
 ## 11. Fora de escopo / pendências
 
-- **Expedição (`multi_day`)** — a "caixa" de divisão em dias (§6). **Principal pendência.**
+- **Expedição (`multi_day`) — Ciclo 2:** plugar o `dividirEmDias` no `multi_day`, a UI (editar cidade do dia, dia parado, gerar trechos sob demanda) e remover o `generate-segments`. O Ciclo 1 (motor `dividirEmDias` dormente) está feito.
 - **Look-ahead** do primitivo (§3.7) — refino v2.
 - **Mapa nativo** — o mini-mapa das alternativas e o TripMap são web-only (native é stub).
 - Limpeza dos erros de tipo `null` pré-existentes do app (revelados pela correção do
@@ -329,7 +332,7 @@ Fluxo de entrega (fim a fim): dev → build de produção local → PR → deplo
 | Look-ahead | Greedy simples no v1; refina depois |
 | Arquitetura de código | Núcleo puro testável + API fina |
 | Verificação | Rotas-ouro automatizadas + teste manual no app |
-| Escolha da cidade de pernoite (Expedição) | **A detalhar** |
+| Escolha da cidade de pernoite (Expedição) | Mais perto do alvo diário + menor desvio da rota |
 
 **2026-07-04 — decisões da implementação (Rolê, em produção):**
 

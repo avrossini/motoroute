@@ -1,0 +1,5 @@
+{
+  "extends": "./tsconfig.json",
+  "include": ["src/domain/route/**/*.ts", "src/services/routeEngine/**/*.ts"],
+  "exclude": ["**/__tests__/**", "**/__testkit.ts", "**/scripts/**"]
+}

@@ -6,8 +6,10 @@
 //   EXPO_PUBLIC_GOOGLE_MAPS_API_KEY=$(grep ^EXPO_PUBLIC_GOOGLE_MAPS_API_KEY= .env.local | cut -d= -f2-) \
 //   LIVE_SMOKE=1 node node_modules/jest/bin/jest.js smoke.live
 import { dividirEmTrechos } from '../../../domain/route/dividirEmTrechos';
+import { dividirEmDias } from '../../../domain/route/dividirEmDias';
 import { googleRoutePort } from '../googleRoutePort';
 import { googleStopsPort } from '../googleStopsPort';
+import { googleCitiesPort } from '../googleCitiesPort';
 
 const LIVE = !!process.env.LIVE_SMOKE && !!process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY;
 const rodar = LIVE ? test : test.skip;
@@ -47,6 +49,39 @@ rodar(
     for (let i = 0; i < r.trechos.length - 1; i++) {
       const t = r.trechos[i];
       if (!t.alertas.includes('sem_posto')) expect(t.posto?.placeId).toBeTruthy();
+    }
+  },
+  60000
+);
+
+rodar(
+  'Expedição: SP → Florianópolis em 3 dias',
+  async () => {
+    const r = await dividirEmDias(
+      {
+        origem: { nome: 'São Paulo, SP', lat: -23.5505, lng: -46.6333 },
+        destino: { nome: 'Florianópolis, SC', lat: -27.5954, lng: -48.548 },
+        nDias: 3,
+      },
+      googleRoutePort,
+      googleCitiesPort
+    );
+
+    // eslint-disable-next-line no-console
+    console.log(`\nExpedição ${r.totalKm} km · ${r.dias.length} dias`);
+    for (const d of r.dias) {
+      // eslint-disable-next-line no-console
+      console.log(
+        `  Dia ${d.dia} · ${String(d.kmDia).padStart(6)} km · ${d.origem.nome} → ${d.destino.nome}${d.alertas.length ? '  ⚠ ' + d.alertas.join(',') : ''}`
+      );
+    }
+
+    expect(r.dias).toHaveLength(3);
+    expect(r.dias[0].origem.nome).toBe('São Paulo, SP');
+    expect(r.dias[2].destino.nome).toBe('Florianópolis, SC');
+    for (let i = 0; i < r.dias.length - 1; i++) {
+      const d = r.dias[i];
+      if (!d.alertas.includes('sem_cidade')) expect(d.cidade?.nome).toBeTruthy();
     }
   },
   60000
