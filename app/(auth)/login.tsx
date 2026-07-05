@@ -33,7 +33,14 @@ export default function LoginScreen() {
 
     setLoading(false);
     if (authError) {
-      setError("E-mail ou senha incorretos.");
+      const notConfirmed =
+        (authError as { code?: string }).code === "email_not_confirmed" ||
+        /not confirmed|confirm/i.test(authError.message ?? "");
+      setError(
+        notConfirmed
+          ? "Confirme seu e-mail antes de entrar. Enviamos um link de confirmação para a sua caixa de entrada — clique nele e depois faça login."
+          : "E-mail ou senha incorretos."
+      );
     } else {
       router.replace("/(tabs)/");
     }

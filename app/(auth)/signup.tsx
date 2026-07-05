@@ -84,7 +84,7 @@ export default function SignupScreen() {
         </View>
         <View style={styles.form}>
           <Text style={styles.successText}>
-            Conta criada! Verifique seu e-mail para confirmar o cadastro e então faça login.
+            Conta criada! Enviamos um e-mail de confirmação. Confirme seu e-mail antes de fazer login — só depois de confirmar você conseguirá entrar.
           </Text>
           <TouchableOpacity style={styles.btnPrimary} onPress={() => router.replace("/(auth)/login")}>
             <Text style={styles.btnPrimaryText}>Ir para o login</Text>
