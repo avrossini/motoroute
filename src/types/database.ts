@@ -1099,6 +1099,7 @@ export type Database = {
       }
       waypoints: {
         Row: {
+          day_index: number | null
           id: string
           is_mandatory: boolean | null
           latitude: number
@@ -1108,6 +1109,7 @@ export type Database = {
           trip_id: string | null
         }
         Insert: {
+          day_index?: number | null
           id?: string
           is_mandatory?: boolean | null
           latitude: number
@@ -1117,6 +1119,7 @@ export type Database = {
           trip_id?: string | null
         }
         Update: {
+          day_index?: number | null
           id?: string
           is_mandatory?: boolean | null
           latitude?: number
