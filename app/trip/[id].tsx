@@ -1325,7 +1325,7 @@ export default function TripDetailScreen() {
     setRemoveWpConfirm(null);
     const { data: remaining } = await supabase
       .from("waypoints")
-      .select("id, name, latitude, longitude, order_index")
+      .select("id, name, latitude, longitude, order_index, day_index")
       .eq("trip_id", id)
       .order("order_index", { ascending: true });
     const remainingRows = remaining ?? [];
@@ -1335,6 +1335,7 @@ export default function TripDetailScreen() {
       latitude: Number(w.latitude),
       longitude: Number(w.longitude),
       order_index: w.order_index,
+      day_index: w.day_index,
     })));
     const remainingWps: ManualWaypoint[] = remainingRows.map((w) => ({
       name: w.name,
@@ -1343,6 +1344,63 @@ export default function TripDetailScreen() {
     }));
     await calcularRota(remainingWps);
     await load();
+  }
+
+  // Re-esqueleta a Expedição de forma REST-DAY-AWARE: num_days = dias de calendário;
+  // nDias do motor = dias de deslocamento (= num_days − parados). Divide entre os dias de
+  // deslocamento e mapeia nos índices de calendário não-parados; dia parado herda a cidade
+  // do dia de deslocamento anterior (sem segmentos). A rota passa pelas paradas obrigatórias
+  // e o day_index de cada parada é gravado a partir do bucketing. Persiste tudo. Usada pelo
+  // recálculo (calcularRota) e por toggleRestDay — fonte única da verdade.
+  async function reesqueletarExpedicao(restSet: Set<number>, at: NonNullable<typeof trip>) {
+    const supabase = getSupabase();
+    const numDays = at.num_days ?? 1;
+    const travelCal: number[] = [];
+    for (let d = 1; d <= numDays; d++) if (!restSet.has(d)) travelCal.push(d);
+    if (travelCal.length === 0) throw new Error("A expedição precisa de ao menos um dia de deslocamento.");
+
+    const { data: wpRows } = await supabase
+      .from("waypoints").select("id,name,latitude,longitude")
+      .eq("trip_id", id).order("order_index", { ascending: true });
+    const paradas = (wpRows ?? []).map((w) => ({ lat: Number(w.latitude), lng: Number(w.longitude), nome: w.name }));
+
+    const result = await calcularExpedicaoRemota({
+      origem: { lat: Number(at.origin_lat), lng: Number(at.origin_lng), nome: at.origin },
+      destino: { lat: Number(at.dest_lat), lng: Number(at.dest_lng), nome: at.destination },
+      nDias: travelCal.length,
+      paradasObrigatorias: paradas.length ? paradas : undefined,
+    });
+
+    const segRows: any[] = [];
+    const tdRows: any[] = [];
+    const wpUpd: PromiseLike<unknown>[] = [];
+    let lastCity = { nome: at.origin, lat: Number(at.origin_lat) as number | null, lng: Number(at.origin_lng) as number | null, placeId: null as string | null };
+    let k = 0;
+    for (let d = 1; d <= numDays; d++) {
+      if (restSet.has(d)) {
+        tdRows.push({ trip_id: id, day_index: d, is_rest_day: true, city_name: lastCity.nome, city_lat: lastCity.lat, city_lng: lastCity.lng, city_place_id: lastCity.placeId, km_dia: 0, duration_min: 0, alert_types: null, segments_generated: false });
+      } else {
+        const dia = result.dias[k];
+        if (!dia) break; // motor devolveu menos dias que o pedido (raro) — para de mapear
+        k++;
+        segRows.push({ trip_id: id, order_index: d * 1000, day_index: d, is_last_of_day: true, origin_name: dia.origem.nome, destination_name: dia.destino.nome, origin_lat: dia.origem.lat, origin_lng: dia.origem.lng, dest_lat: dia.destino.lat, dest_lng: dia.destino.lng, distance_km: dia.kmDia, duration_minutes: dia.duracaoMin, route_summary: null, has_alert: dia.alertas.length > 0, alert_types: dia.alertas.length > 0 ? dia.alertas : null });
+        tdRows.push({ trip_id: id, day_index: d, is_rest_day: false, city_name: dia.cidade?.nome ?? null, city_lat: dia.cidade?.lat ?? null, city_lng: dia.cidade?.lng ?? null, city_place_id: dia.cidade?.placeId ?? null, km_dia: dia.kmDia, duration_min: dia.duracaoMin, alert_types: dia.alertas.length > 0 ? dia.alertas : null, segments_generated: false });
+        for (const p of dia.paradasObrigatorias ?? []) {
+          const wp = (wpRows ?? []).find((w) => Math.abs(Number(w.latitude) - p.lat) < 1e-4 && Math.abs(Number(w.longitude) - p.lng) < 1e-4);
+          if (wp) wpUpd.push(supabase.from("waypoints").update({ day_index: d }).eq("id", wp.id));
+        }
+        lastCity = { nome: dia.destino.nome, lat: dia.destino.lat, lng: dia.destino.lng, placeId: dia.cidade?.placeId ?? null };
+      }
+    }
+
+    await supabase.from("segments").delete().eq("trip_id", id);
+    await supabase.from("segments").insert(segRows);
+    await supabase.from("trip_days").delete().eq("trip_id", id);
+    await supabase.from("trip_days").insert(tdRows);
+    if (wpUpd.length > 0) await Promise.all(wpUpd);
+    await supabase.from("trips").update({ total_distance_km: result.totalKm, total_duration_min: result.totalMin, stop_count: 0 }).eq("id", id);
+
+    return { totalKm: result.totalKm, travelN: travelCal.length };
   }
 
   async function calcularRota(overrideWaypoints?: ManualWaypoint[], tripOverride?: typeof trip) {
@@ -1357,8 +1415,6 @@ export default function TripDetailScreen() {
       let segRows: any[];
       let totals: { total_distance_km: number; total_duration_min: number; stop_count: number };
       let trechosRole: Trecho[] | null = null;
-      let tripDaysRows: any[] | null = null; // Expedição: linhas de trip_days a gravar
-      let wpDayUpdates: { id: string; day: number }[] | null = null; // bucketing das paradas
 
       if (activeTripVal.trip_type === "day_trip") {
         const { data: { user: authUser } } = await supabase.auth.getUser();
@@ -1403,31 +1459,14 @@ export default function TripDetailScreen() {
           stop_count: Math.max(0, result.trechos.length - 1),
         };
       } else {
-        // Expedição (multi_day): motor novo. Gera só o ESQUELETO de dias — cada
-        // pernoite é uma cidade. Os trechos de cada dia vêm SOB DEMANDA (botão
-        // "Gerar trechos deste dia"). Ver docs/route-engine.md §6.
-        const nDias = activeTripVal.num_days ?? 1;
-        // Paradas obrigatórias do usuário (waypoints) — a rota passa por elas.
-        const { data: wpRows } = await supabase
-          .from("waypoints").select("id,name,latitude,longitude")
-          .eq("trip_id", id).order("order_index", { ascending: true });
-        const paradas = (wpRows ?? []).map((w) => ({ lat: Number(w.latitude), lng: Number(w.longitude), nome: w.name }));
-        const result = await calcularExpedicaoRemota({
-          origem: { lat: Number(activeTripVal.origin_lat), lng: Number(activeTripVal.origin_lng), nome: activeTripVal.origin },
-          destino: { lat: Number(activeTripVal.dest_lat), lng: Number(activeTripVal.dest_lng), nome: activeTripVal.destination },
-          nDias,
-          paradasObrigatorias: paradas.length ? paradas : undefined,
-        });
-        // Bucketing: grava em qual dia cada parada caiu (sem dias parados no recálculo → day = dia).
-        wpDayUpdates = result.dias.flatMap((d) =>
-          (d.paradasObrigatorias ?? []).flatMap((p) => {
-            const wp = (wpRows ?? []).find((w) => Math.abs(Number(w.latitude) - p.lat) < 1e-4 && Math.abs(Number(w.longitude) - p.lng) < 1e-4);
-            return wp ? [{ id: wp.id, day: d.dia }] : [];
-          })
-        );
+        // Expedição (multi_day): re-esqueleta preservando os dias parados existentes
+        // (rest-day-aware) e re-bucketa as paradas. Persiste dentro de reesqueletarExpedicao.
+        const restSet = new Set<number>();
+        for (const [d, td] of tripDays) if (td.is_rest_day) restSet.add(d);
+        const { totalKm, travelN } = await reesqueletarExpedicao(restSet, activeTripVal);
 
-        // Alerta de média diária (business-logic §59) — informativo, não bloqueia.
-        const avgDaily = nDias > 0 ? Math.round(result.totalKm / nDias) : 0;
+        // Alerta de média diária (business-logic §59) — sobre os dias de DESLOCAMENTO.
+        const avgDaily = travelN > 0 ? Math.round(totalKm / travelN) : 0;
         if (avgDaily > 500) {
           const isExtremo = avgDaily > 650;
           Alert.alert(
@@ -1437,54 +1476,20 @@ export default function TripDetailScreen() {
           );
         }
 
-        // 1 segmento placeholder por dia (o "dia" inteiro origem→cidade); order_index
-        // = dia*1000 + trecho, para gerar os trechos de um dia sem renumerar os outros.
-        segRows = result.dias.map((d) => ({
-          trip_id: id,
-          order_index: d.dia * 1000,
-          day_index: d.dia,
-          is_last_of_day: true,
-          origin_name: d.origem.nome,
-          destination_name: d.destino.nome,
-          origin_lat: d.origem.lat,
-          origin_lng: d.origem.lng,
-          dest_lat: d.destino.lat,
-          dest_lng: d.destino.lng,
-          distance_km: d.kmDia,
-          duration_minutes: d.duracaoMin,
-          route_summary: null,
-          has_alert: d.alertas.length > 0,
-          alert_types: d.alertas.length > 0 ? d.alertas : null,
-        }));
-        tripDaysRows = result.dias.map((d) => ({
-          trip_id: id,
-          day_index: d.dia,
-          is_rest_day: false,
-          city_name: d.cidade?.nome ?? null,
-          city_lat: d.cidade?.lat ?? null,
-          city_lng: d.cidade?.lng ?? null,
-          city_place_id: d.cidade?.placeId ?? null,
-          km_dia: d.kmDia,
-          duration_min: d.duracaoMin,
-          alert_types: d.alertas.length > 0 ? d.alertas : null,
-          segments_generated: false,
-        }));
-        totals = {
-          total_distance_km: result.totalKm,
-          total_duration_min: result.totalMin,
-          stop_count: 0,
-        };
+        await load();
+        const { data: freshExpSegs } = await supabase
+          .from("segments").select("*").eq("trip_id", id).order("order_index", { ascending: true });
+        if (freshExpSegs && freshExpSegs.length > 0) {
+          // Só clima — os postos vêm por dia sob demanda (gerarTrechosDia).
+          await fetchWeather(freshExpSegs, activeTripVal.departure_date);
+          await load();
+        }
+        return; // Expedição faz a própria persistência — pula a comum abaixo
       }
 
+      // Persistência comum (day_trip):
       await supabase.from("segments").delete().eq("trip_id", id);
       await supabase.from("segments").insert(segRows);
-      if (tripDaysRows) {
-        await supabase.from("trip_days").delete().eq("trip_id", id);
-        await supabase.from("trip_days").insert(tripDaysRows);
-      }
-      if (wpDayUpdates && wpDayUpdates.length > 0) {
-        await Promise.all(wpDayUpdates.map((u) => supabase.from("waypoints").update({ day_index: u.day }).eq("id", u.id)));
-      }
       await supabase.from("trips").update(totals).eq("id", id);
 
       await load();
@@ -1495,11 +1500,10 @@ export default function TripDetailScreen() {
         .eq("trip_id", id)
         .order("order_index", { ascending: true });
       if (freshSegs && freshSegs.length > 0) {
-        // Esqueleto da Expedição (tripDaysRows): só clima — postos vêm por dia sob demanda.
-        const enrich: Promise<unknown>[] = [fetchWeather(freshSegs, activeTripVal.departure_date)];
-        if (trechosRole) enrich.push(attachRolePostos(freshSegs, trechosRole));
-        else if (!tripDaysRows) enrich.push(fetchStops(freshSegs));
-        await Promise.all(enrich);
+        await Promise.all([
+          fetchWeather(freshSegs, activeTripVal.departure_date),
+          trechosRole ? attachRolePostos(freshSegs, trechosRole) : fetchStops(freshSegs),
+        ]);
         await load();
       }
     } catch (e: any) {
@@ -1575,7 +1579,7 @@ export default function TripDetailScreen() {
         .eq("trip_id", id)
         .order("order_index", { ascending: true });
       const segs = allSegs ?? [];
-      const nDays = segs.length > 0 ? Math.max(...segs.map((s) => s.day_index ?? 1)) : (trip.num_days ?? 1);
+      const nDays = segs.length > 0 ? new Set(segs.map((s) => s.day_index ?? 1)).size : (trip.num_days ?? 1);
       await supabase.from("trips").update({
         total_distance_km: Math.round(segs.reduce((s, x) => s + (x.distance_km ?? 0), 0)),
         total_duration_min: segs.reduce((s, x) => s + (x.duration_minutes ?? 0), 0),
@@ -1644,31 +1648,40 @@ export default function TripDetailScreen() {
         alert_types: null, segments_generated: false,
       }).eq("trip_id", id).eq("day_index", D);
 
-      // Dia D+1 (se houver): nova cidade → destino do dia D+1
-      const d1Segs = segments
-        .filter((s) => (s.day_index ?? 1) === D + 1)
+      // Dias parados logo após D herdam a nova cidade; o próximo dia de DESLOCAMENTO
+      // tem sua origem atualizada e o km recomputado.
+      const numCal = trip.num_days ?? D;
+      let nextTravel = D + 1;
+      while (nextTravel <= numCal && tripDays.get(nextTravel)?.is_rest_day) {
+        await supabase.from("trip_days").update({
+          city_name: geo.name, city_lat: geo.lat, city_lng: geo.lng, city_place_id: cityPlaceId,
+        }).eq("trip_id", id).eq("day_index", nextTravel);
+        nextTravel++;
+      }
+      const ntSegs = segments
+        .filter((s) => (s.day_index ?? 1) === nextTravel)
         .sort((a, b) => (a.order_index ?? 0) - (b.order_index ?? 0));
-      if (d1Segs.length > 0) {
-        const last = d1Segs[d1Segs.length - 1];
-        const destD1 = { lat: Number(last.dest_lat), lng: Number(last.dest_lng), nome: last.destination_name ?? trip.destination };
-        const r2 = await dir(geo.lat, geo.lng, destD1.lat, destD1.lng);
-        await supabase.from("segments").delete().eq("trip_id", id).eq("day_index", D + 1);
+      if (ntSegs.length > 0) {
+        const last = ntSegs[ntSegs.length - 1];
+        const destNt = { lat: Number(last.dest_lat), lng: Number(last.dest_lng), nome: last.destination_name ?? trip.destination };
+        const r2 = await dir(geo.lat, geo.lng, destNt.lat, destNt.lng);
+        await supabase.from("segments").delete().eq("trip_id", id).eq("day_index", nextTravel);
         await supabase.from("segments").insert([{
-          trip_id: id, order_index: (D + 1) * 1000, day_index: D + 1, is_last_of_day: true,
-          origin_name: geo.name, destination_name: destD1.nome,
-          origin_lat: geo.lat, origin_lng: geo.lng, dest_lat: destD1.lat, dest_lng: destD1.lng,
+          trip_id: id, order_index: nextTravel * 1000, day_index: nextTravel, is_last_of_day: true,
+          origin_name: geo.name, destination_name: destNt.nome,
+          origin_lat: geo.lat, origin_lng: geo.lng, dest_lat: destNt.lat, dest_lng: destNt.lng,
           distance_km: r2.distance_km ?? 0, duration_minutes: r2.duration_min ?? 0,
           route_summary: null, has_alert: false, alert_types: null,
         }]);
         await supabase.from("trip_days").update({
           km_dia: r2.distance_km ?? null, duration_min: r2.duration_min ?? null, segments_generated: false,
-        }).eq("trip_id", id).eq("day_index", D + 1);
+        }).eq("trip_id", id).eq("day_index", nextTravel);
       }
 
       // Totais
       const { data: allSegs } = await supabase.from("segments").select("distance_km,duration_minutes,day_index").eq("trip_id", id);
       if (allSegs) {
-        const nd = allSegs.length > 0 ? Math.max(...allSegs.map((s) => s.day_index ?? 1)) : (trip.num_days ?? 1);
+        const nd = allSegs.length > 0 ? new Set(allSegs.map((s) => s.day_index ?? 1)).size : (trip.num_days ?? 1);
         await supabase.from("trips").update({
           total_distance_km: Math.round(allSegs.reduce((s, r) => s + Number(r.distance_km), 0)),
           total_duration_min: allSegs.reduce((s, r) => s + Number(r.duration_minutes), 0),
@@ -1715,65 +1728,9 @@ export default function TripDetailScreen() {
 
     setTogglingRest(dayIndex);
     try {
-      const supabase = getSupabase();
-      const { data: wpRows } = await supabase
-        .from("waypoints").select("id,name,latitude,longitude")
-        .eq("trip_id", id).order("order_index", { ascending: true });
-      const paradas = (wpRows ?? []).map((w) => ({ lat: Number(w.latitude), lng: Number(w.longitude), nome: w.name }));
-      const result = await calcularExpedicaoRemota({
-        origem: { lat: Number(trip.origin_lat), lng: Number(trip.origin_lng), nome: trip.origin },
-        destino: { lat: Number(trip.dest_lat), lng: Number(trip.dest_lng), nome: trip.destination },
-        nDias: travelCal.length,
-        paradasObrigatorias: paradas.length ? paradas : undefined,
-      });
-
-      const segRows: any[] = [];
-      const tdRows: any[] = [];
-      let lastCity = { nome: trip.origin, lat: Number(trip.origin_lat) as number | null, lng: Number(trip.origin_lng) as number | null, placeId: null as string | null };
-      let k = 0;
-      for (let d = 1; d <= numDays; d++) {
-        if (restSet.has(d)) {
-          // dia parado: herda a cidade do dia de deslocamento anterior, sem segmentos
-          tdRows.push({
-            trip_id: id, day_index: d, is_rest_day: true,
-            city_name: lastCity.nome, city_lat: lastCity.lat, city_lng: lastCity.lng, city_place_id: lastCity.placeId,
-            km_dia: 0, duration_min: 0, alert_types: null, segments_generated: false,
-          });
-        } else {
-          const dia = result.dias[k];
-          k++;
-          segRows.push({
-            trip_id: id, order_index: d * 1000, day_index: d, is_last_of_day: true,
-            origin_name: dia.origem.nome, destination_name: dia.destino.nome,
-            origin_lat: dia.origem.lat, origin_lng: dia.origem.lng, dest_lat: dia.destino.lat, dest_lng: dia.destino.lng,
-            distance_km: dia.kmDia, duration_minutes: dia.duracaoMin, route_summary: null,
-            has_alert: dia.alertas.length > 0, alert_types: dia.alertas.length > 0 ? dia.alertas : null,
-          });
-          tdRows.push({
-            trip_id: id, day_index: d, is_rest_day: false,
-            city_name: dia.cidade?.nome ?? null, city_lat: dia.cidade?.lat ?? null, city_lng: dia.cidade?.lng ?? null, city_place_id: dia.cidade?.placeId ?? null,
-            km_dia: dia.kmDia, duration_min: dia.duracaoMin, alert_types: dia.alertas.length > 0 ? dia.alertas : null, segments_generated: false,
-          });
-          lastCity = { nome: dia.destino.nome, lat: dia.destino.lat, lng: dia.destino.lng, placeId: dia.cidade?.placeId ?? null };
-        }
-      }
-
-      await supabase.from("segments").delete().eq("trip_id", id);
-      await supabase.from("segments").insert(segRows);
-      await supabase.from("trip_days").delete().eq("trip_id", id);
-      await supabase.from("trip_days").insert(tdRows);
-      // Bucketing das paradas: cada dia de deslocamento k → dia de calendário travelCal[k].
-      const wpUpd: PromiseLike<unknown>[] = [];
-      result.dias.forEach((dia, kk) => {
-        for (const p of dia.paradasObrigatorias ?? []) {
-          const wp = (wpRows ?? []).find((w) => Math.abs(Number(w.latitude) - p.lat) < 1e-4 && Math.abs(Number(w.longitude) - p.lng) < 1e-4);
-          if (wp) wpUpd.push(supabase.from("waypoints").update({ day_index: travelCal[kk] }).eq("id", wp.id));
-        }
-      });
-      if (wpUpd.length > 0) await Promise.all(wpUpd);
-      await supabase.from("trips").update({ total_distance_km: result.totalKm, total_duration_min: result.totalMin, stop_count: 0 }).eq("id", id);
+      await reesqueletarExpedicao(restSet, trip);
       await load();
-
+      const supabase = getSupabase();
       const { data: freshSegs } = await supabase.from("segments").select("*").eq("trip_id", id).order("order_index", { ascending: true });
       if (freshSegs && freshSegs.length > 0) {
         await fetchWeather(freshSegs, trip.departure_date);
@@ -2144,7 +2101,6 @@ export default function TripDetailScreen() {
                     const globalIdx = segments.indexOf(seg);
                     const isLastSeg = globalIdx === segments.length - 1;
                     const showLodging = seg.is_last_of_day && dayIdx < numDiasCal && !isDayTrip;
-                    const wpsAfter = waypoints.filter((w) => w.order_index === globalIdx);
                     const depTime = segmentTimes.get(seg.id) ?? baseTime;
 
                     return (
@@ -2163,41 +2119,6 @@ export default function TripDetailScreen() {
                           } : undefined}
                           onNavigatePress={() => handleNavigate(seg)}
                         />
-                        {wpsAfter.length > 0 && (
-                          <View style={styles.wpDivider}>
-                            {wpsAfter.map((wp) => (
-                              <View key={wp.id}>
-                                {removeWpConfirm === wp.id ? (
-                                  <View style={styles.wpRemoveConfirm}>
-                                    <Text style={styles.wpRemoveConfirmText}>Remover "{wp.name}"?</Text>
-                                    <TouchableOpacity
-                                      onPress={() => setRemoveWpConfirm(null)}
-                                      style={styles.wpRemoveCancel}
-                                    >
-                                      <Text style={styles.wpRemoveCancelText}>Não</Text>
-                                    </TouchableOpacity>
-                                    <TouchableOpacity
-                                      onPress={() => deleteWaypoint(wp.id)}
-                                      style={styles.wpRemoveConfirmBtn}
-                                    >
-                                      <Text style={styles.wpRemoveConfirmBtnText}>Remover</Text>
-                                    </TouchableOpacity>
-                                  </View>
-                                ) : (
-                                  <View style={styles.wpTag}>
-                                    <Text style={styles.wpTagText}>📍 {wp.name}</Text>
-                                    <TouchableOpacity
-                                      onPress={() => setRemoveWpConfirm(wp.id)}
-                                      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                                    >
-                                      <Text style={styles.wpTagRemove}>×</Text>
-                                    </TouchableOpacity>
-                                  </View>
-                                )}
-                              </View>
-                            ))}
-                          </View>
-                        )}
                         {isDayTrip && segIdx < daySegs.length - 1 && (
                           <TouchableOpacity
                             style={styles.mergeStopBtn}
@@ -2210,14 +2131,9 @@ export default function TripDetailScreen() {
                         )}
                         {showLodging && (
                           <>
-                            {seg.alert_types?.includes("pernoite_sem_cidade") && (
+                            {tripDays.get(dayIdx)?.alert_types?.includes("sem_cidade") && (
                               <Text style={styles.pernoiteWarning}>
-                                ⚠️ Fim de dia em ponto sem cidade confirmada — verifique o local de pernoite
-                              </Text>
-                            )}
-                            {seg.alert_types?.includes("pernoite_ajustado") && (
-                              <Text style={styles.pernoiteInfo}>
-                                ℹ️ Dia ajustado para terminar em cidade com melhor estrutura
+                                ⚠️ Fim de dia sem cidade confirmada — verifique o local de pernoite
                               </Text>
                             )}
                             <LodgingBlock
