@@ -32,6 +32,8 @@ interface Parada {
   nome: string;
   /** Alerta de qualidade/existência do posto (avaliacao_baixa | sem_posto). Km-alerts são recomputados depois. */
   alertaExtra: Alerta | null;
+  /** true quando é uma parada OBRIGATÓRIA do usuário (precedência sobre a regra de km). */
+  mandatory?: boolean;
 }
 
 const round1 = (n: number): number => Math.round(n * 10) / 10;
@@ -107,15 +109,25 @@ export async function dividirEmTrechos(
   stops: StopsPort
 ): Promise<DividirResult> {
   const { origem, destino, faixa } = input;
+  const paradasObrig = input.paradasObrigatorias ?? [];
 
-  // 1. Rota inicial (1 chamada Directions)
-  const raw0 = await rota.getRoute(origem, destino);
+  // 1. Rota inicial passando pelas paradas obrigatórias (km/geometria já com o desvio)
+  const raw0 = await rota.getRoute(
+    origem,
+    destino,
+    paradasObrig.map((p) => ({ lat: p.lat, lng: p.lng }))
+  );
   assertOk(raw0);
   const caminho = construirCaminho(raw0.pontos);
   const total = kmTotalCaminho(caminho);
 
-  // Caso trivial: cabe em 1 trecho (não chama Places)
-  if (total <= faixa.max) {
+  // km along-route de cada parada obrigatória, em ordem de rota
+  const paradasKm = paradasObrig
+    .map((p) => ({ p, km: kmRodoviarioAte(caminho, { lat: p.lat, lng: p.lng }, 0) }))
+    .sort((a, b) => a.km - b.km);
+
+  // Caso trivial: cabe em 1 trecho e não há parada obrigatória a cravar
+  if (total <= faixa.max && paradasKm.length === 0) {
     const leg = raw0.legs[0];
     const dist = leg.distanceMeters / 1000;
     const trecho: Trecho = {
@@ -131,12 +143,25 @@ export async function dividirEmTrechos(
     return { trechos: [trecho], totalKm: Math.round(dist), totalMin: trecho.duracaoMin };
   }
 
-  // 2. Loop greedy: escolher os postos (1 chamada Places por trecho)
+  // 2. Loop greedy: postos naturais + paradas obrigatórias cravadas na ordem.
+  //    Continua enquanto sobra mais que um trecho OU ainda há parada por cravar.
   const paradas: Parada[] = [];
   let atualKm = 0;
+  let mIdx = 0;
   const MAX_ITER = 200; // backstop contra loop patológico
-  for (let guard = 0; total - atualKm > faixa.max && guard < MAX_ITER; guard++) {
-    const parada = await decidirParada(caminho, atualKm, input, stops);
+  for (let guard = 0; guard < MAX_ITER; guard++) {
+    const faltamParadas = mIdx < paradasKm.length;
+    if (total - atualKm <= faixa.max && !faltamParadas) break;
+
+    let parada: Parada;
+    if (faltamParadas && paradasKm[mIdx].km <= atualKm + faixa.max + 1e-6) {
+      // parada obrigatória alcançável neste trecho → crava (precedência sobre 100-200)
+      const po = paradasKm[mIdx].p;
+      parada = { ponto: { lat: po.lat, lng: po.lng }, posto: null, nome: po.nome, alertaExtra: null, mandatory: true };
+      mIdx++;
+    } else {
+      parada = await decidirParada(caminho, atualKm, input, stops);
+    }
     const novoKm = kmRodoviarioAte(caminho, parada.ponto, atualKm);
     paradas.push(parada);
     if (novoKm <= atualKm) break; // proteção contra não-avanço
@@ -160,9 +185,13 @@ export async function dividirEmTrechos(
     const alertas: Alerta[] = [];
     // alerta de qualidade/existência do posto que fecha este trecho
     if (!isLast && paradas[i].alertaExtra) alertas.push(paradas[i].alertaExtra!);
-    // alertas de km recomputados sobre a distância REAL (fecha o gap da aproximação)
-    if (dist > faixa.max) alertas.push('trecho_longo');
-    if (!isLast && dist < faixa.min) alertas.push('trecho_curto'); // último trecho é isento do mínimo
+    // km-alertas recomputados sobre a distância REAL — mas a fronteira que é uma
+    // parada OBRIGATÓRIA tem precedência sobre a regra 100-200 e não gera alerta.
+    const fronteiraObrigatoria = !isLast && !!paradas[i].mandatory;
+    if (!fronteiraObrigatoria) {
+      if (dist > faixa.max) alertas.push('trecho_longo');
+      if (!isLast && dist < faixa.min) alertas.push('trecho_curto'); // último trecho é isento do mínimo
+    }
 
     return {
       ordem: i,

@@ -74,7 +74,9 @@ export class FakeRoute implements RoutePort {
     const bounds = [0, ...wps.map((w) => this.projetar(w)), this.total()];
     const legs: RawLeg[] = [];
     for (let i = 0; i < bounds.length - 1; i++) legs.push(this.legEntre(bounds[i], bounds[i + 1]));
-    return { status: 'OK', summary: this.summary, pontos: [], legs };
+    // O Google devolve o overview polyline mesmo com waypoints; espelhamos isso
+    // (no harness os waypoints ficam sobre a reta, então a geometria não muda).
+    return { status: 'OK', summary: this.summary, pontos: this.pontos, legs };
   }
 }
 
@@ -148,4 +150,32 @@ export const inputDias = (totalKm: number, nDias: number) => ({
   origem: { ...pontoNoKm(0), nome: 'Origem' } as PontoNomeado,
   destino: { ...pontoNoKm(totalKm), nome: 'Destino' } as PontoNomeado,
   nDias,
+});
+
+export interface ParadaDef {
+  km: number;
+  nome: string;
+  offKm?: number;
+}
+const paradaNoKm = (d: ParadaDef): PontoNomeado => ({
+  ...(d.offKm ? pontoOffRota(d.km, d.offKm) : pontoNoKm(d.km)),
+  nome: d.nome,
+});
+
+/** DividirEmDiasInput com paradas obrigatórias cravadas em km ao longo da rota. */
+export const inputDiasComParadas = (totalKm: number, nDias: number, paradas: ParadaDef[]) => ({
+  ...inputDias(totalKm, nDias),
+  paradasObrigatorias: paradas.map(paradaNoKm),
+});
+
+/** DividirInput (primitivo) com paradas obrigatórias em km ao longo da rota. */
+export const inputComParadas = (
+  totalKm: number,
+  min: number,
+  max: number,
+  paradas: ParadaDef[],
+  favoritos: string[] = []
+) => ({
+  ...input(totalKm, min, max, favoritos),
+  paradasObrigatorias: paradas.map(paradaNoKm),
 });

@@ -11,6 +11,15 @@ export interface PontoNomeado extends Ponto {
   nome: string;
 }
 
+/**
+ * Parada obrigatória do usuário: ponto que a rota DEVE cruzar e que é preservado
+ * em qualquer recálculo (business-logic §11/§261/§476). Tem precedência sobre a
+ * regra de km por trecho — vira fronteira de trecho mesmo que fique curto.
+ */
+export interface ParadaObrigatoria extends PontoNomeado {
+  placeId?: string | null;
+}
+
 /** Posto de combustível real (resultado normalizado do Places). */
 export interface Posto {
   placeId: string;
@@ -51,6 +60,8 @@ export interface DividirInput {
   faixa: FaixaKm;
   /** place_ids favoritados pelo usuário (favorites.place_id). */
   favoritos: Set<string>;
+  /** Paradas do usuário cravadas como fronteiras de trecho, em ordem de rota. */
+  paradasObrigatorias?: ParadaObrigatoria[];
 }
 
 export interface DividirResult {
@@ -127,12 +138,16 @@ export interface DiaExpedicao {
   kmDia: number;
   duracaoMin: number;
   alertas: AlertaDia[];
+  /** Paradas obrigatórias que caem neste dia (para o Rolê cravar ao gerar os trechos). */
+  paradasObrigatorias?: ParadaObrigatoria[];
 }
 
 export interface DividirEmDiasInput {
   origem: PontoNomeado;
   destino: PontoNomeado;
   nDias: number; // dias de DESLOCAMENTO (dias parados são overlay do Ciclo 2)
+  /** Paradas do usuário: a rota base passa por elas e cada uma é bucketada ao seu dia. */
+  paradasObrigatorias?: ParadaObrigatoria[];
 }
 
 export interface DividirEmDiasResult {
