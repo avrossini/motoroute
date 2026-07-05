@@ -1,7 +1,7 @@
 // Motor do Rolê (day_trip) — casca fina sobre o primitivo.
 //   só ida     → dividirEmTrechos 1×
 //   ida e volta → dividirEmTrechos 2× (volta recalculada independente) + concatena
-import type { RoutePort, StopsPort, DividirResult, PontoNomeado, FaixaKm, Trecho } from './types';
+import type { RoutePort, StopsPort, DividirResult, PontoNomeado, FaixaKm, Trecho, ParadaObrigatoria } from './types';
 import { dividirEmTrechos } from './dividirEmTrechos';
 
 export interface RoleInput {
@@ -11,6 +11,8 @@ export interface RoleInput {
   favoritos: Set<string>;
   /** Se true, planeja também a volta (destino→origem), recalculada de forma independente. */
   idaEVolta?: boolean;
+  /** Paradas obrigatórias na ida (a Expedição passa as paradas do dia). */
+  paradasObrigatorias?: ParadaObrigatoria[];
 }
 
 export interface RoleResult extends DividirResult {
@@ -24,7 +26,13 @@ export async function calcularRole(
   stops: StopsPort
 ): Promise<RoleResult> {
   const ida = await dividirEmTrechos(
-    { origem: input.origem, destino: input.destino, faixa: input.faixa, favoritos: input.favoritos },
+    {
+      origem: input.origem,
+      destino: input.destino,
+      faixa: input.faixa,
+      favoritos: input.favoritos,
+      paradasObrigatorias: input.paradasObrigatorias,
+    },
     rota,
     stops
   );

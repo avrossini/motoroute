@@ -11,6 +11,7 @@ import type {
   Ponto,
   Cidade,
   AlertaDia,
+  ParadaObrigatoria,
   RoutePort,
   CitiesPort,
   RawDirections,
@@ -100,14 +101,25 @@ export async function dividirEmDias(
   cities: CitiesPort
 ): Promise<DividirEmDiasResult> {
   const { origem, destino, nDias } = input;
+  const paradasObrig = input.paradasObrigatorias ?? [];
 
-  // 1. Rota base (1 Directions)
-  const raw0 = await rota.getRoute(origem, destino);
+  // 1. Rota base passando pelas paradas obrigatórias (km/geometria já com o desvio,
+  //    para a divisão em dias distribuir levando as paradas em conta).
+  const raw0 = await rota.getRoute(
+    origem,
+    destino,
+    paradasObrig.map((p) => ({ lat: p.lat, lng: p.lng }))
+  );
   assertOk(raw0);
   const caminho = construirCaminho(raw0.pontos);
   const total = kmTotalCaminho(caminho);
 
-  // 2. N=1: dia único O→D (não busca cidade)
+  // km along-route de cada parada obrigatória, em ordem de rota
+  const paradasKm = paradasObrig
+    .map((p) => ({ p, km: kmRodoviarioAte(caminho, { lat: p.lat, lng: p.lng }, 0) }))
+    .sort((a, b) => a.km - b.km);
+
+  // 2. N=1: dia único O→D (não busca cidade); todas as paradas caem nele
   if (nDias <= 1) {
     const leg = raw0.legs[0];
     const kmDia = round1(leg.distanceMeters / 1000);
@@ -119,12 +131,14 @@ export async function dividirEmDias(
       kmDia,
       duracaoMin: Math.round(leg.durationSeconds / 60),
       alertas: alertasKmDia(kmDia),
+      paradasObrigatorias: paradasObrig.length ? paradasObrig.slice() : undefined,
     };
     return { dias: [dia], totalKm: Math.round(kmDia), totalMin: dia.duracaoMin };
   }
 
   // 3. Greedy com re-âncora: N-1 fronteiras (cidades de pernoite)
   const fronteiras: Fronteira[] = [];
+  const boundaryKm: number[] = [0]; // km de início de cada dia (0, km1, km2, …)
   let atualKm = 0;
   for (let i = 1; i <= nDias - 1; i++) {
     const diasRestantes = nDias - (i - 1); // dias ainda por dividir, incluindo o atual
@@ -134,6 +148,17 @@ export async function dividirEmDias(
     if (novoKm <= atualKm) break; // proteção contra não-avanço
     fronteiras.push(fronteira);
     atualKm = novoKm;
+    boundaryKm.push(atualKm);
+  }
+  boundaryKm.push(total); // fim do último dia
+
+  // Bucket cada parada obrigatória no dia cujo span [início, fim) a contém.
+  // A fronteira (limite superior) pertence ao dia anterior (determinístico).
+  const paradasPorDia: ParadaObrigatoria[][] = Array.from({ length: fronteiras.length + 1 }, () => []);
+  for (const { p, km } of paradasKm) {
+    let d = 0;
+    while (d < boundaryKm.length - 2 && km > boundaryKm[d + 1]) d++;
+    paradasPorDia[d].push(p);
   }
 
   // 4. Directions final passando pelas cidades → legs reais por dia
@@ -151,6 +176,7 @@ export async function dividirEmDias(
     const destinoDia: PontoNomeado = isLast ? destino : fronteiraComoPonto(fronteiras[i]);
     const alertas: AlertaDia[] = alertasKmDia(kmDia);
     if (!isLast && fronteiras[i].semCidade) alertas.push('sem_cidade');
+    const pd = paradasPorDia[i] ?? [];
     return {
       dia: i + 1,
       origem: origemDia,
@@ -159,6 +185,7 @@ export async function dividirEmDias(
       kmDia,
       duracaoMin: Math.round(leg.durationSeconds / 60),
       alertas,
+      paradasObrigatorias: pd.length ? pd : undefined,
     };
   });
 
