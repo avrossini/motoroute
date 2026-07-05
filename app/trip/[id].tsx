@@ -18,7 +18,6 @@ import { useState, useCallback, useRef, useEffect } from "react";
 import { useFocusEffect } from "expo-router";
 import { getSupabase } from "@/services/supabase";
 import { openNavigation } from "@/platform/navigation";
-import { generateSegments, type ManualWaypoint } from "@/services/googleDirections";
 import { calcularRoleRemoto } from "@/services/roleService";
 import { calcularExpedicaoRemota } from "@/services/expedicaoService";
 import type { Trecho } from "@/domain/route/types";
@@ -663,7 +662,7 @@ export default function TripDetailScreen() {
 
   useFocusEffect(useCallback(() => {
     load().then((tripData) => {
-      if (autoCalc === "true" && tripData) calcularRota(undefined, tripData);
+      if (autoCalc === "true" && tripData) calcularRota(tripData);
     });
   }, [id]));
 
@@ -1102,23 +1101,28 @@ export default function TripDetailScreen() {
         destLat?: number | null; destLng?: number | null;
       };
 
-      // Se um sub-trecho exceder max_stop_km, subdividi-lo via generateSegments
+      // Se um sub-trecho exceder max_stop_km, subdividi-lo com o motor buscar-primeiro
+      // (mesmo do Rolê) — postos reais, em vez do corte geométrico do motor antigo.
       async function maybeSubdivide(
         originName: string, destName: string, km: number, min: number,
         oLat?: number | null, oLng?: number | null,
         dLat?: number | null, dLng?: number | null,
       ): Promise<NewSeg[]> {
         if (km <= maxKm) return [{ originName, destName, km, min, originLat: oLat, originLng: oLng, destLat: dLat, destLng: dLng }];
-        const sub = await generateSegments(originName, destName, minKm, maxKm, 1);
-        return sub.segments.map((s) => ({
-          originName: s.origin_name,
-          destName: s.destination_name,
-          km: s.distance_km,
-          min: s.duration_minutes,
-          originLat: s.origin_lat,
-          originLng: s.origin_lng,
-          destLat: s.dest_lat,
-          destLng: s.dest_lng,
+        const r = await calcularRoleRemoto({
+          origem: { lat: Number(oLat), lng: Number(oLng), nome: originName },
+          destino: { lat: Number(dLat), lng: Number(dLng), nome: destName },
+          minStopKm: minKm, maxStopKm: maxKm, favoritos: [], idaEVolta: false,
+        });
+        return r.trechos.map((t) => ({
+          originName: t.origem.nome,
+          destName: t.destino.nome,
+          km: t.distanciaKm,
+          min: t.duracaoMin,
+          originLat: t.origem.lat,
+          originLng: t.origem.lng,
+          destLat: t.destino.lat,
+          destLng: t.destino.lng,
         }));
       }
 
@@ -1337,12 +1341,7 @@ export default function TripDetailScreen() {
       order_index: w.order_index,
       day_index: w.day_index,
     })));
-    const remainingWps: ManualWaypoint[] = remainingRows.map((w) => ({
-      name: w.name,
-      lat: Number(w.latitude),
-      lng: Number(w.longitude),
-    }));
-    await calcularRota(remainingWps);
+    await calcularRota();
     await load();
   }
 
@@ -1403,15 +1402,15 @@ export default function TripDetailScreen() {
     return { totalKm: result.totalKm, travelN: travelCal.length };
   }
 
-  async function calcularRota(overrideWaypoints?: ManualWaypoint[], tripOverride?: typeof trip) {
+  async function calcularRota(tripOverride?: typeof trip) {
     const activeTripVal = tripOverride ?? trip;
     if (!activeTripVal) return;
     setCalculating(true);
     try {
       const supabase = getSupabase();
 
-      // Monta os segmentos: day_trip (Rolê) usa o novo motor buscar-primeiro;
-      // multi_day (Expedição) segue no generate-segments até o cutover da Expedição.
+      // Monta os segmentos: day_trip (Rolê) gera os trechos; multi_day (Expedição) gera
+      // o esqueleto de dias (trechos sob demanda). Ambos no motor buscar-primeiro.
       let segRows: any[];
       let totals: { total_distance_km: number; total_duration_min: number; stop_count: number };
       let trechosRole: Trecho[] | null = null;

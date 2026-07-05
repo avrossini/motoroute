@@ -1,16 +1,15 @@
 # Motor de Cálculo de Rotas — o "cérebro" da aplicação
 
-> **Status (2026-07-04):** primitivo `dividirEmTrechos` e **Rolê (`day_trip`)
-> IMPLEMENTADOS e EM PRODUÇÃO** (PRs #4 e #6). A **Expedição (`multi_day`) ainda NÃO foi
-> implementada** — o `multi_day` continua no motor antigo (`generate-segments`); falta a
-> "caixa" de divisão em dias (§6). O cutover foi **incremental por tipo** (day_trip
-> primeiro), **não** atômico (§10).
+> **Status (2026-07-05):** primitivo `dividirEmTrechos`, **Rolê (`day_trip`)** e
+> **Expedição (`multi_day`)** IMPLEMENTADOS e EM PRODUÇÃO. O Ciclo 2 plugou o
+> `dividirEmDias` no `multi_day` (esqueleto de dias + trechos sob demanda + editar cidade
+> de pernoite + dia parado + paradas obrigatórias) e **o motor antigo `generate-segments`
+> foi REMOVIDO**. O cutover foi **incremental por tipo** (day_trip primeiro), **não** atômico (§10).
 >
 > Este documento é a **fonte da verdade da arquitetura de cálculo de rotas**. O
 > `business-logic.md` define o *comportamento de negócio* que o motor deve respeitar;
-> este define *como* o motor o implementa. Substitui a estratégia legada de
-> `business-logic.md → ### Estratégia de cálculo por comprimento de rota` para o
-> `day_trip`; para o `multi_day`, a estratégia antiga ainda vige até a Expedição.
+> este define *como* o motor o implementa. Substitui integralmente a estratégia legada de
+> `business-logic.md → ### Estratégia de cálculo por comprimento de rota` (day_trip e multi_day).
 
 ---
 
@@ -216,11 +215,12 @@ Sub-opção ida/volta persistida em `trips.round_trip`. Nome do trecho = **cidad
 
 ## 6. Motor da Expedição (`multi_day`)
 
-> **Estado (2026-07-04):** o **Ciclo 1 está feito** — o motor `dividirEmDias`
-> (`src/domain/route/dividirEmDias.ts`) + `CitiesPort`/`googleCitiesPort` + testes-ouro +
-> smoke ao vivo, **dormente** (nada no app o importa ainda). Falta o **Ciclo 2**: plugar no
-> `multi_day`, a UI (editar cidade do dia, dia parado, gerar trechos sob demanda) e remover
-> o `generate-segments`. Até lá o `multi_day` segue no motor antigo.
+> **Estado (2026-07-05): Ciclo 2 CONCLUÍDO, em produção.** O `multi_day` roda no
+> `dividirEmDias`: gera o **esqueleto de dias** (cada pernoite uma cidade, tabela `trip_days`);
+> os trechos de cada dia são gerados **sob demanda** pelo Rolê. UI: editar a cidade de
+> pernoite, marcar **dia parado**, e **paradas obrigatórias** (`waypoints`, a rota passa por
+> elas e cada uma cai num dia). O motor antigo `generate-segments` foi **removido** (o
+> insert-stop passou a subdividir via o Rolê buscar-primeiro).
 
 Dois passos:
 
@@ -298,12 +298,11 @@ por tipo**, porque o Rolê ficou pronto antes e há valor em entregá-lo já:
 
 1. **PR #4** — primitivo puro + adapters + testes (dormente, sem tocar no app).
 2. **PR #6** — o `day_trip` passa a usar o motor novo (`/api/role`); `generate-segments`
-   **continua servindo o `multi_day`**.
-3. **Pendente** — a Expedição (§6). Só quando ela migrar é que o `generate-segments` pode
-   ser removido.
-
-**Consequência aceita:** velho e novo **coexistem** enquanto a Expedição não é feita. O
-`insert-stop` (subdivisão via `generateSegments`) e o `multi_day` ainda usam o motor antigo.
+   continuou servindo o `multi_day` temporariamente.
+3. **Ciclo 2 (PRs #12–#20)** — a Expedição (§6) migrou para o `dividirEmDias` (esqueleto de
+   dias + `trip_days` + trechos sob demanda + editar cidade/dia parado/paradas obrigatórias);
+   o `insert-stop` passou a subdividir via o Rolê buscar-primeiro; e o **`generate-segments`
+   foi REMOVIDO**. Velho e novo não coexistem mais — todo o cálculo é buscar-primeiro.
 
 Fluxo de entrega (fim a fim): dev → build de produção local → PR → deploy → verificação.
 
@@ -311,7 +310,7 @@ Fluxo de entrega (fim a fim): dev → build de produção local → PR → deplo
 
 ## 11. Fora de escopo / pendências
 
-- **Expedição (`multi_day`) — Ciclo 2:** plugar o `dividirEmDias` no `multi_day`, a UI (editar cidade do dia, dia parado, gerar trechos sob demanda) e remover o `generate-segments`. O Ciclo 1 (motor `dividirEmDias` dormente) está feito.
+- ✅ **Expedição (`multi_day`) — Ciclo 2 CONCLUÍDO (2026-07-05):** `dividirEmDias` plugado no `multi_day` + tabela `trip_days` + UI (editar cidade de pernoite, dia parado, paradas obrigatórias, trechos sob demanda) + `generate-segments` removido.
 - **Look-ahead** do primitivo (§3.7) — refino v2.
 - **Mapa nativo** — o mini-mapa das alternativas e o TripMap são web-only (native é stub).
 - Limpeza dos erros de tipo `null` pré-existentes do app (revelados pela correção do
@@ -338,7 +337,7 @@ Fluxo de entrega (fim a fim): dev → build de produção local → PR → deplo
 
 | Decisão | Escolha |
 |---|---|
-| Substituição do motor | **Incremental por tipo** (não atômico): day_trip migrou (PR #6); multi_day segue no antigo |
+| Substituição do motor | **Incremental por tipo** (não atômico): day_trip (PR #6) → Expedição (Ciclo 2); `generate-segments` removido no fim |
 | Nome do trecho | **Cidade** do posto (reverse-geocode), não o nome do posto (§3.8) |
 | Rolê ida e volta | **Mesmo dia** (`day_index` 1); split IDA/VOLTA no render por grupos |
 | Alternativas de parada | Posto escolhido (selecionado) + vizinhos (não-selecionados); mini-mapa web com pinpoints numerados |
