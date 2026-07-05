@@ -89,6 +89,7 @@ interface Waypoint {
   latitude: number;
   longitude: number;
   order_index: number;
+  day_index?: number | null; // Expedição: dia de deslocamento em que a parada cai (bucketing)
 }
 
 interface GeoResult {
@@ -526,6 +527,8 @@ export default function TripDetailScreen() {
   const [editCityModal, setEditCityModal] = useState<{ dayIndex: number; currentCity: string } | null>(null);
   const [savingCity, setSavingCity] = useState(false);
   const [togglingRest, setTogglingRest] = useState<number | null>(null);
+  const [addParadaModal, setAddParadaModal] = useState(false);
+  const [savingParada, setSavingParada] = useState(false);
   const [wpQuery, setWpQuery] = useState("");
   const [wpResults, setWpResults] = useState<GeoResult[]>([]);
   const [wpSearching, setWpSearching] = useState(false);
@@ -590,7 +593,7 @@ export default function TripDetailScreen() {
 
     const { data: wpData } = await supabase
       .from("waypoints")
-      .select("id, name, latitude, longitude, order_index")
+      .select("id, name, latitude, longitude, order_index, day_index")
       .eq("trip_id", id)
       .order("order_index", { ascending: true });
     setWaypoints((wpData ?? []).map((w) => ({
@@ -599,6 +602,7 @@ export default function TripDetailScreen() {
       latitude: Number(w.latitude),
       longitude: Number(w.longitude),
       order_index: w.order_index,
+      day_index: w.day_index,
     })));
 
     const { data: lodgingData } = await supabase
@@ -1354,6 +1358,7 @@ export default function TripDetailScreen() {
       let totals: { total_distance_km: number; total_duration_min: number; stop_count: number };
       let trechosRole: Trecho[] | null = null;
       let tripDaysRows: any[] | null = null; // Expedição: linhas de trip_days a gravar
+      let wpDayUpdates: { id: string; day: number }[] | null = null; // bucketing das paradas
 
       if (activeTripVal.trip_type === "day_trip") {
         const { data: { user: authUser } } = await supabase.auth.getUser();
@@ -1402,11 +1407,24 @@ export default function TripDetailScreen() {
         // pernoite é uma cidade. Os trechos de cada dia vêm SOB DEMANDA (botão
         // "Gerar trechos deste dia"). Ver docs/route-engine.md §6.
         const nDias = activeTripVal.num_days ?? 1;
+        // Paradas obrigatórias do usuário (waypoints) — a rota passa por elas.
+        const { data: wpRows } = await supabase
+          .from("waypoints").select("id,name,latitude,longitude")
+          .eq("trip_id", id).order("order_index", { ascending: true });
+        const paradas = (wpRows ?? []).map((w) => ({ lat: Number(w.latitude), lng: Number(w.longitude), nome: w.name }));
         const result = await calcularExpedicaoRemota({
           origem: { lat: Number(activeTripVal.origin_lat), lng: Number(activeTripVal.origin_lng), nome: activeTripVal.origin },
           destino: { lat: Number(activeTripVal.dest_lat), lng: Number(activeTripVal.dest_lng), nome: activeTripVal.destination },
           nDias,
+          paradasObrigatorias: paradas.length ? paradas : undefined,
         });
+        // Bucketing: grava em qual dia cada parada caiu (sem dias parados no recálculo → day = dia).
+        wpDayUpdates = result.dias.flatMap((d) =>
+          (d.paradasObrigatorias ?? []).flatMap((p) => {
+            const wp = (wpRows ?? []).find((w) => Math.abs(Number(w.latitude) - p.lat) < 1e-4 && Math.abs(Number(w.longitude) - p.lng) < 1e-4);
+            return wp ? [{ id: wp.id, day: d.dia }] : [];
+          })
+        );
 
         // Alerta de média diária (business-logic §59) — informativo, não bloqueia.
         const avgDaily = nDias > 0 ? Math.round(result.totalKm / nDias) : 0;
@@ -1464,6 +1482,9 @@ export default function TripDetailScreen() {
         await supabase.from("trip_days").delete().eq("trip_id", id);
         await supabase.from("trip_days").insert(tripDaysRows);
       }
+      if (wpDayUpdates && wpDayUpdates.length > 0) {
+        await Promise.all(wpDayUpdates.map((u) => supabase.from("waypoints").update({ day_index: u.day }).eq("id", u.id)));
+      }
       await supabase.from("trips").update(totals).eq("id", id);
 
       await load();
@@ -1508,6 +1529,12 @@ export default function TripDetailScreen() {
         : { data: null };
       const favoritos = (favData ?? []).map((f) => f.place_id);
 
+      // Paradas obrigatórias deste dia (bucketadas no esqueleto) — o Rolê crava só as do dia.
+      const { data: wpDia } = await supabase
+        .from("waypoints").select("name,latitude,longitude")
+        .eq("trip_id", id).eq("day_index", dayIndex);
+      const paradasDia = (wpDia ?? []).map((w) => ({ lat: Number(w.latitude), lng: Number(w.longitude), nome: w.name }));
+
       const result = await calcularRoleRemoto({
         origem: { lat: Number(daySeg.origin_lat), lng: Number(daySeg.origin_lng), nome: daySeg.origin_name ?? trip.origin },
         destino: { lat: Number(daySeg.dest_lat), lng: Number(daySeg.dest_lng), nome: daySeg.destination_name ?? trip.destination },
@@ -1515,6 +1542,7 @@ export default function TripDetailScreen() {
         maxStopKm: trip.max_stop_km,
         favoritos,
         idaEVolta: false,
+        paradasObrigatorias: paradasDia.length ? paradasDia : undefined,
       });
 
       const novos = result.trechos.map((t, i) => ({
@@ -1688,10 +1716,15 @@ export default function TripDetailScreen() {
     setTogglingRest(dayIndex);
     try {
       const supabase = getSupabase();
+      const { data: wpRows } = await supabase
+        .from("waypoints").select("id,name,latitude,longitude")
+        .eq("trip_id", id).order("order_index", { ascending: true });
+      const paradas = (wpRows ?? []).map((w) => ({ lat: Number(w.latitude), lng: Number(w.longitude), nome: w.name }));
       const result = await calcularExpedicaoRemota({
         origem: { lat: Number(trip.origin_lat), lng: Number(trip.origin_lng), nome: trip.origin },
         destino: { lat: Number(trip.dest_lat), lng: Number(trip.dest_lng), nome: trip.destination },
         nDias: travelCal.length,
+        paradasObrigatorias: paradas.length ? paradas : undefined,
       });
 
       const segRows: any[] = [];
@@ -1729,6 +1762,15 @@ export default function TripDetailScreen() {
       await supabase.from("segments").insert(segRows);
       await supabase.from("trip_days").delete().eq("trip_id", id);
       await supabase.from("trip_days").insert(tdRows);
+      // Bucketing das paradas: cada dia de deslocamento k → dia de calendário travelCal[k].
+      const wpUpd: PromiseLike<unknown>[] = [];
+      result.dias.forEach((dia, kk) => {
+        for (const p of dia.paradasObrigatorias ?? []) {
+          const wp = (wpRows ?? []).find((w) => Math.abs(Number(w.latitude) - p.lat) < 1e-4 && Math.abs(Number(w.longitude) - p.lng) < 1e-4);
+          if (wp) wpUpd.push(supabase.from("waypoints").update({ day_index: travelCal[kk] }).eq("id", wp.id));
+        }
+      });
+      if (wpUpd.length > 0) await Promise.all(wpUpd);
       await supabase.from("trips").update({ total_distance_km: result.totalKm, total_duration_min: result.totalMin, stop_count: 0 }).eq("id", id);
       await load();
 
@@ -1741,6 +1783,34 @@ export default function TripDetailScreen() {
       Alert.alert("Erro ao alterar o dia", e.message ?? "Tente novamente.");
     } finally {
       setTogglingRest(null);
+    }
+  }
+
+  // Expedição: adiciona uma parada obrigatória (waypoint). Re-esqueleta (a rota passa
+  // pela parada e ela é bucketada num dia). Re-esqueletar reseta dias parados (como o
+  // recálculo); as paradas são preservadas (persistidas em waypoints).
+  async function adicionarParada(geo: GeoResult) {
+    if (!trip) return;
+    if (trip.status === "active") {
+      Alert.alert("Viagem em andamento", "Não é possível alterar as paradas com a viagem já iniciada.");
+      return;
+    }
+    setSavingParada(true);
+    try {
+      const supabase = getSupabase();
+      const nextOrder = waypoints.reduce((m, w) => Math.max(m, w.order_index), -1) + 1;
+      await supabase.from("waypoints").insert([{
+        trip_id: id, name: geo.name, latitude: geo.lat, longitude: geo.lng, order_index: nextOrder, is_mandatory: true,
+      }]);
+      setAddParadaModal(false);
+      setWpQuery("");
+      setWpResults([]);
+      await calcularRota();
+      await load();
+    } catch (e: any) {
+      Alert.alert("Erro ao adicionar parada", e.message ?? "Tente novamente.");
+    } finally {
+      setSavingParada(false);
     }
   }
 
@@ -1995,6 +2065,29 @@ export default function TripDetailScreen() {
                   } : undefined}
                   onToggleRest={!isDayTrip && dayIdx > 1 ? () => toggleRestDay(dayIdx) : undefined}
                 />
+                {/* Paradas obrigatórias deste dia (Expedição) */}
+                {!isDayTrip && (() => {
+                  const paradasDoDia = waypoints.filter((w) => w.day_index === dayIdx);
+                  if (paradasDoDia.length === 0) return null;
+                  return (
+                    <View style={styles.paradasRow}>
+                      {paradasDoDia.map((wp) => (
+                        <View key={wp.id} style={styles.paradaTag}>
+                          <Text style={styles.paradaTagText} numberOfLines={1}>📍 {wp.name}</Text>
+                          {trip.status !== "active" && (
+                            <TouchableOpacity
+                              onPress={() => deleteWaypoint(wp.id)}
+                              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                              disabled={calculating}
+                            >
+                              <Text style={styles.paradaTagRemove}>×</Text>
+                            </TouchableOpacity>
+                          )}
+                        </View>
+                      ))}
+                    </View>
+                  );
+                })()}
                 {/* day alert banner — shown when daily distance exceeds 500 km */}
                 {dayTotalKm > 500 && (
                   <View style={styles.dayAlertBanner}>
@@ -2146,6 +2239,17 @@ export default function TripDetailScreen() {
             );
           })}
           </View>
+        )}
+
+        {/* Parada obrigatória (Expedição) */}
+        {!isDayTrip && segments.length > 0 && (
+          <TouchableOpacity
+            style={[styles.btnParada, (calculating || savingParada || trip.status === "active") && { opacity: 0.5 }]}
+            onPress={() => { setAddParadaModal(true); setWpQuery(""); setWpResults([]); }}
+            disabled={calculating || savingParada || trip.status === "active"}
+          >
+            <Text style={styles.btnParadaText}>➕ Parada obrigatória</Text>
+          </TouchableOpacity>
         )}
 
         {/* Action buttons (D8) */}
@@ -2650,6 +2754,64 @@ export default function TripDetailScreen() {
           </Pressable>
         </Modal>
 
+        {/* Adicionar parada obrigatória (Expedição) */}
+        <Modal
+          visible={addParadaModal}
+          transparent
+          animationType="slide"
+          onRequestClose={() => setAddParadaModal(false)}
+        >
+          <Pressable style={styles.modalOverlay} onPress={() => !savingParada && setAddParadaModal(false)}>
+            <Pressable style={styles.modalSheet} onPress={() => {}}>
+              <View style={styles.modalHandle} />
+              <Text style={styles.modalTitle}>Parada obrigatória</Text>
+              <Text style={styles.editCitySub}>
+                A rota vai passar por este ponto e ele vira uma parada fixa no dia em que cair.
+                Adicionar refaz a divisão em dias (reseta dias parados; as paradas são mantidas).
+              </Text>
+              <View style={styles.wpSearchRow}>
+                <TextInput
+                  style={styles.wpSearchInput}
+                  value={wpQuery}
+                  onChangeText={setWpQuery}
+                  placeholder="Cidade, posto ou endereço"
+                  placeholderTextColor="#aaa"
+                  onSubmitEditing={() => searchWaypoint(wpQuery)}
+                  returnKeyType="search"
+                  autoFocus
+                  editable={!savingParada}
+                />
+                <TouchableOpacity style={styles.wpSearchBtn} onPress={() => searchWaypoint(wpQuery)} disabled={wpSearching || savingParada}>
+                  {wpSearching ? <ActivityIndicator color="#fff" size="small" /> : <Text style={styles.wpSearchBtnText}>Buscar</Text>}
+                </TouchableOpacity>
+              </View>
+              {savingParada ? (
+                <View style={{ paddingVertical: 16, alignItems: "center", gap: 6 }}>
+                  <ActivityIndicator color="#C97826" />
+                  <Text style={styles.modalCancelText}>Refazendo a divisão em dias…</Text>
+                </View>
+              ) : (
+                <>
+                  {wpResults.map((r, idx) => (
+                    <TouchableOpacity key={idx} style={styles.altRow} onPress={() => adicionarParada(r)}>
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.altName} numberOfLines={1}>📍 {r.name}</Text>
+                        <Text style={styles.altMeta} numberOfLines={1}>{r.address}</Text>
+                      </View>
+                    </TouchableOpacity>
+                  ))}
+                  {wpResults.length === 0 && !wpSearching && wpQuery.trim().length > 0 && (
+                    <Text style={styles.modalCancelText}>Nenhum resultado. Tente outro nome.</Text>
+                  )}
+                </>
+              )}
+              <TouchableOpacity style={styles.modalCancelBtn} onPress={() => setAddParadaModal(false)} disabled={savingParada}>
+                <Text style={styles.modalCancelText}>Fechar</Text>
+              </TouchableOpacity>
+            </Pressable>
+          </Pressable>
+        </Modal>
+
         {/* Stop insertion impact preview modal — Phase 4 */}
         <Modal
           visible={wpPending != null}
@@ -2912,6 +3074,14 @@ const styles = StyleSheet.create({
   restDayText: { fontSize: 14, color: "#374151", fontWeight: "600" },
   restToggleBtn: { borderWidth: 1, borderColor: "#C97826", borderRadius: 10, paddingVertical: 9, paddingHorizontal: 18, minHeight: 40, alignItems: "center", justifyContent: "center" },
   restToggleBtnText: { color: "#C97826", fontSize: 14, fontWeight: "700" },
+
+  // Paradas obrigatórias (Expedição)
+  btnParada: { borderWidth: 1, borderColor: "#2563EB", borderRadius: 12, paddingVertical: 12, marginHorizontal: 16, marginTop: 8, alignItems: "center" },
+  btnParadaText: { color: "#2563EB", fontSize: 15, fontWeight: "700" },
+  paradasRow: { flexDirection: "row", flexWrap: "wrap", gap: 6, paddingHorizontal: 12, paddingTop: 8 },
+  paradaTag: { flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: "#EFF6FF", borderRadius: 8, paddingHorizontal: 10, paddingVertical: 5 },
+  paradaTagText: { fontSize: 12, color: "#1D4ED8", fontWeight: "600", maxWidth: 200 },
+  paradaTagRemove: { fontSize: 16, color: "#1D4ED8", fontWeight: "700" },
 
   // Segment card (D2, D3, D11)
   segCard: {
