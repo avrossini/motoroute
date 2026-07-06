@@ -2149,7 +2149,7 @@ export default function TripDetailScreen() {
                     setWpQuery("");
                     setWpResults([]);
                   } : undefined}
-                  onNavigatePress={() => handleNavigate(seg)}
+                  onNavigatePress={trip.status === "active" ? () => handleNavigate(seg) : undefined}
                 />
                 {isDayTrip && segIdx < daySegs.length - 1 && (
                   <TouchableOpacity
