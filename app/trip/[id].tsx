@@ -519,6 +519,7 @@ export default function TripDetailScreen() {
   const [activeView, setActiveView] = useState<"list" | "map">("list");
   const isDesktop = useIsDesktopWeb();
   const board = useBoardColumns();
+  const [menuOpen, setMenuOpen] = useState(false);
   const [fetchingWeather, setFetchingWeather] = useState(false);
   const [stops, setStops] = useState<Map<string, StopSuggestion>>(new Map());
   const [lodging, setLodging] = useState<Map<number, LodgingSuggestion>>(new Map());
@@ -2223,6 +2224,15 @@ export default function TripDetailScreen() {
       <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent}>
         {/* Summary card */}
         <View style={styles.summaryCard}>
+          <TouchableOpacity
+            style={styles.summaryMenuBtn}
+            onPress={() => setMenuOpen(true)}
+            accessibilityRole="button"
+            accessibilityLabel="Ações da viagem"
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          >
+            <Text style={styles.summaryMenuIcon}>⋮</Text>
+          </TouchableOpacity>
           <Text style={styles.summaryRoute}>
             {trip.origin} → {trip.destination}
           </Text>
@@ -2288,8 +2298,15 @@ export default function TripDetailScreen() {
           <View style={styles.emptyCard}>
             <Text style={styles.emptyText}>Rota ainda não calculada.</Text>
             <Text style={styles.emptyHint}>
-              Toque em "Calcular Rota" para buscar os segmentos via Google Maps.
+              Calcule a rota para buscar os segmentos via Google Maps.
             </Text>
+            <TouchableOpacity
+              style={[styles.emptyCalcBtn, (calculating || fetchingWeather) && { opacity: 0.6 }]}
+              onPress={() => calcularRota()}
+              disabled={calculating || fetchingWeather}
+            >
+              {calculating ? <ActivityIndicator color="#fff" /> : <Text style={styles.emptyCalcBtnText}>🧭 Calcular Rota</Text>}
+            </TouchableOpacity>
           </View>
         ) : !isDayTrip ? (
           // Expedição: board horizontal (colunas = dias). Ver useBoardColumns/DayBoard.
@@ -2306,133 +2323,128 @@ export default function TripDetailScreen() {
           </View>
         )}
 
-        {/* ===== Barra de ações — 3 zonas: Planejamento · Palco · Rodapé ===== */}
-        <View style={styles.actionsWrap}>
-          {trip.status === "active" && (
-            <View style={styles.stateBadgeActive}>
-              <Text style={styles.stateBadgeActiveText}>● EM ANDAMENTO</Text>
-            </View>
-          )}
-          {trip.status === "completed" && (
-            <View style={styles.stateBadgeDone}>
-              <Text style={styles.stateBadgeDoneText}>✓ CONCLUÍDA</Text>
-            </View>
-          )}
+        {/* Regras da viagem (info) */}
+        {segments.length > 0 && trip.max_stop_km != null && (
+          <View style={styles.rulesCard}>
+            <Text style={styles.rulesTitle}>REGRAS DA VIAGEM</Text>
+            <Text style={styles.rulesLine}>
+              Paradas: {trip.min_stop_km}–{trip.max_stop_km} km entre cada uma
+            </Text>
+          </View>
+        )}
 
-          {/* ZONA 1 — Planejamento (utilitários) */}
-          {trip.status !== "completed" && (
-            <View style={styles.zone}>
-              <Text style={styles.zoneLabel}>PLANEJAMENTO</Text>
-              {segments.length === 0 ? (
-                <View style={styles.planCard}>
-                  <TouchableOpacity
-                    style={[styles.planSeg, (calculating || fetchingWeather) && styles.planSegDisabled]}
-                    onPress={() => calcularRota()}
-                    disabled={calculating || fetchingWeather}
-                  >
-                    {calculating ? <ActivityIndicator color="#555" /> : <Text style={styles.planSegText}>Calcular Rota</Text>}
-                  </TouchableOpacity>
-                </View>
-              ) : (
-                <>
-                  <View style={styles.planCard}>
-                    {/* Recalcular — bloqueado na viagem ativa (apagaria segments/órfãos de check-in) */}
-                    <TouchableOpacity
-                      style={[styles.planSeg, (calculating || fetchingWeather || trip.status === "active") && styles.planSegDisabled]}
-                      onPress={() => setShowRecalcConfirm(true)}
-                      disabled={calculating || fetchingWeather || trip.status === "active"}
-                    >
-                      {calculating ? <ActivityIndicator color="#555" /> : (
-                        <Text style={styles.planSegText}>{trip.status === "active" ? "🔒 Recalcular" : "↻ Recalcular"}</Text>
-                      )}
-                    </TouchableOpacity>
-                    {weatherAvailable && (
-                      <TouchableOpacity
-                        style={[styles.planSeg, (fetchingWeather || calculating) && styles.planSegDisabled]}
-                        onPress={() => fetchWeather(segments, trip.departure_date)}
-                        disabled={fetchingWeather || calculating}
-                      >
-                        {fetchingWeather ? <ActivityIndicator color="#555" /> : (
-                          <Text style={styles.planSegText}>{hasWeatherData ? "Atualizar Clima" : "Buscar Clima"}</Text>
-                        )}
-                      </TouchableOpacity>
-                    )}
-                    {/* Parada obrigatória — só Expedição, fora da viagem ativa */}
-                    {!isDayTrip && trip.status !== "active" && (
-                      <TouchableOpacity
-                        style={[styles.planSeg, styles.planSegParada, (calculating || savingParada) && styles.planSegDisabled]}
-                        onPress={() => { setAddParadaModal(true); setWpQuery(""); setWpResults([]); }}
-                        disabled={calculating || savingParada}
-                      >
-                        <Text style={styles.planSegParadaText}>➕ Parada</Text>
-                      </TouchableOpacity>
+        {/* Menu de ações da viagem — aberto pelo ⋮ do card de resumo. Reúne todas as
+            ações da viagem (Rolê ou Expedição), que antes ficavam empilhadas no rodapé. */}
+        <Modal
+          visible={menuOpen}
+          transparent
+          animationType="slide"
+          onRequestClose={() => setMenuOpen(false)}
+        >
+          <Pressable style={styles.modalOverlay} onPress={() => setMenuOpen(false)}>
+            <Pressable style={styles.modalSheet} onPress={() => {}}>
+              <View style={styles.modalHandle} />
+              <Text style={styles.modalTitle}>Ações da viagem</Text>
+
+              {/* Ação principal contextual (destacada) */}
+              {segments.length === 0 && (
+                <TouchableOpacity
+                  style={[styles.menuRow, styles.menuRowPrimary, (calculating || fetchingWeather) && styles.menuRowDisabled]}
+                  onPress={() => { setMenuOpen(false); calcularRota(); }}
+                  disabled={calculating || fetchingWeather}
+                >
+                  <Text style={styles.menuIconPrimary}>🧭</Text>
+                  <Text style={styles.menuLabelPrimary}>Calcular Rota</Text>
+                </TouchableOpacity>
+              )}
+              {segments.length > 0 && (trip.status === "planned" || trip.status === "saved") && (
+                <TouchableOpacity
+                  style={[styles.menuRow, styles.menuRowPrimary, (calculating || fetchingWeather) && styles.menuRowDisabled]}
+                  onPress={() => { setMenuOpen(false); startTrip(); }}
+                  disabled={calculating || fetchingWeather}
+                >
+                  <Text style={styles.menuIconPrimary}>🏍</Text>
+                  <Text style={styles.menuLabelPrimary}>Iniciar Viagem</Text>
+                </TouchableOpacity>
+              )}
+              {trip.status === "active" && (
+                <TouchableOpacity
+                  style={[styles.menuRow, styles.menuRowPrimary]}
+                  onPress={() => { setMenuOpen(false); router.push(`/trip/${id}/active` as any); }}
+                >
+                  <Text style={styles.menuIconPrimary}>▶</Text>
+                  <Text style={styles.menuLabelPrimary}>Continuar Viagem</Text>
+                </TouchableOpacity>
+              )}
+
+              {/* Utilitários */}
+              {segments.length > 0 && (
+                <TouchableOpacity
+                  style={[styles.menuRow, (calculating || fetchingWeather || trip.status === "active") && styles.menuRowDisabled]}
+                  onPress={() => { setMenuOpen(false); setShowRecalcConfirm(true); }}
+                  disabled={calculating || fetchingWeather || trip.status === "active"}
+                >
+                  <Text style={styles.menuIcon}>↻</Text>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.menuLabel}>Recalcular Rota</Text>
+                    {trip.status === "active" && (
+                      <Text style={styles.menuNote}>Bloqueado na viagem em andamento</Text>
                     )}
                   </View>
-                  {trip.status === "planned" && (
-                    <View style={styles.planExtra}>
-                      <TouchableOpacity
-                        style={[styles.saveChip, (calculating || fetchingWeather) && styles.planSegDisabled]}
-                        onPress={saveTrip}
-                        disabled={calculating || fetchingWeather}
-                      >
-                        <Text style={styles.saveChipText}>💾 Salvar rascunho</Text>
-                      </TouchableOpacity>
-                      <View style={styles.microRow}>
-                        <View style={styles.microDot} />
-                        <Text style={styles.microText}>rascunho não salvo</Text>
-                      </View>
-                    </View>
-                  )}
-                  {trip.status === "saved" && (
-                    <View style={styles.planExtra}>
-                      <Text style={styles.microTextOk}>✓ Salva — está nas suas viagens</Text>
-                    </View>
-                  )}
+                </TouchableOpacity>
+              )}
+              {segments.length > 0 && weatherAvailable && (
+                <TouchableOpacity
+                  style={[styles.menuRow, (fetchingWeather || calculating) && styles.menuRowDisabled]}
+                  onPress={() => { setMenuOpen(false); fetchWeather(segments, trip.departure_date); }}
+                  disabled={fetchingWeather || calculating}
+                >
+                  <Text style={styles.menuIcon}>🌦️</Text>
+                  <Text style={styles.menuLabel}>{hasWeatherData ? "Atualizar Clima" : "Buscar Previsão do Tempo"}</Text>
+                </TouchableOpacity>
+              )}
+              {!isDayTrip && segments.length > 0 && trip.status !== "active" && (
+                <TouchableOpacity
+                  style={[styles.menuRow, (calculating || savingParada) && styles.menuRowDisabled]}
+                  onPress={() => { setMenuOpen(false); setAddParadaModal(true); setWpQuery(""); setWpResults([]); }}
+                  disabled={calculating || savingParada}
+                >
+                  <Text style={styles.menuIcon}>➕</Text>
+                  <Text style={styles.menuLabel}>Parada obrigatória</Text>
+                </TouchableOpacity>
+              )}
+              {trip.status === "planned" && (
+                <TouchableOpacity
+                  style={[styles.menuRow, (calculating || fetchingWeather) && styles.menuRowDisabled]}
+                  onPress={() => { setMenuOpen(false); saveTrip(); }}
+                  disabled={calculating || fetchingWeather}
+                >
+                  <Text style={styles.menuIcon}>💾</Text>
+                  <Text style={styles.menuLabel}>Salvar</Text>
+                </TouchableOpacity>
+              )}
+
+              {/* Destrutivo */}
+              {trip.status !== "completed" && (
+                <>
+                  <View style={styles.menuDivider} />
+                  <TouchableOpacity
+                    style={styles.menuRow}
+                    onPress={() => { setMenuOpen(false); setShowDeleteConfirm(true); }}
+                    disabled={deleting}
+                  >
+                    <Text style={styles.menuIcon}>🗑</Text>
+                    <Text style={[styles.menuLabel, styles.menuLabelDanger]}>Excluir viagem</Text>
+                  </TouchableOpacity>
                 </>
               )}
-            </View>
-          )}
 
-          {/* ZONA 2 — Palco (a ação principal, sozinha e dominante) */}
-          {segments.length > 0 && (trip.status === "planned" || trip.status === "saved") && (
-            <View style={styles.zonePalco}>
-              <TouchableOpacity
-                style={[styles.cta, isDesktop ? styles.ctaSolid : styles.ctaInverted, (calculating || fetchingWeather) && styles.ctaLoading]}
-                onPress={startTrip}
-                disabled={calculating || fetchingWeather}
-              >
-                <Text style={isDesktop ? styles.ctaSolidText : styles.ctaInvertedText}>🏍 Iniciar Viagem</Text>
+              <TouchableOpacity style={styles.menuCancel} onPress={() => setMenuOpen(false)}>
+                <Text style={styles.menuCancelText}>Fechar</Text>
               </TouchableOpacity>
-            </View>
-          )}
-          {trip.status === "active" && (
-            <View style={styles.zonePalco}>
-              <TouchableOpacity
-                style={[styles.cta, styles.ctaSolid]}
-                onPress={() => router.push(`/trip/${id}/active` as any)}
-              >
-                <Text style={styles.ctaSolidText}>▶ Continuar Viagem</Text>
-              </TouchableOpacity>
-            </View>
-          )}
-
-          {/* ZONA 3 — Rodapé (regras + excluir discreto) */}
-          {segments.length > 0 && trip.max_stop_km != null && (
-            <View style={[styles.rulesCard, styles.rulesCardZone]}>
-              <Text style={styles.rulesTitle}>REGRAS DA VIAGEM</Text>
-              <Text style={styles.rulesLine}>
-                Paradas: {trip.min_stop_km}–{trip.max_stop_km} km entre cada uma
-              </Text>
-            </View>
-          )}
-          {trip.status !== "completed" && (
-            <View style={styles.excluirRow}>
-              <TouchableOpacity onPress={() => setShowDeleteConfirm(true)} disabled={deleting} accessibilityRole="button" accessibilityLabel="Excluir viagem">
-                {deleting ? <ActivityIndicator color="#E53935" /> : <Text style={styles.excluirText}>🗑 Excluir viagem</Text>}
-              </TouchableOpacity>
-            </View>
-          )}
-        </View>
+            </Pressable>
+          </Pressable>
+        </Modal>
 
         {/* Stop alternatives modal */}
         <Modal
@@ -3036,7 +3048,7 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 2 },
     elevation: 2,
   },
-  summaryRoute: { fontSize: 17, fontWeight: "700", color: "#1A1A1A", marginBottom: 4 },
+  summaryRoute: { fontSize: 17, fontWeight: "700", color: "#1A1A1A", marginBottom: 4, paddingRight: 32 },
   summaryDate: { fontSize: 13, color: "#666", marginBottom: 16 },
   statsRow: { flexDirection: "row", gap: 24 },
   stat: { alignItems: "center" },
@@ -3346,37 +3358,24 @@ const styles = StyleSheet.create({
   rulesTitle: { fontSize: 10, fontWeight: "700", color: "#C97826", letterSpacing: 0.8, marginBottom: 4 },
   rulesLine: { fontSize: 13, color: "#7C4A00" },
 
-  // ===== Barra de ações redesenhada (3 zonas: Planejamento · Palco · Rodapé) =====
-  actionsWrap: { width: "100%", maxWidth: 560, alignSelf: "center", paddingHorizontal: 16, marginTop: 10 },
-  stateBadgeActive: { alignSelf: "flex-start", backgroundColor: "#16A34A", borderRadius: 20, paddingHorizontal: 10, paddingVertical: 4, marginBottom: 14, marginLeft: 2 },
-  stateBadgeActiveText: { color: "#fff", fontSize: 10, fontWeight: "800", letterSpacing: 0.5 },
-  stateBadgeDone: { alignSelf: "flex-start", backgroundColor: "#E7E4E0", borderRadius: 20, paddingHorizontal: 10, paddingVertical: 4, marginBottom: 14, marginLeft: 2 },
-  stateBadgeDoneText: { color: "#555", fontSize: 10, fontWeight: "800", letterSpacing: 0.5 },
-  zone: { marginBottom: 20 },
-  zoneLabel: { fontSize: 10, fontWeight: "800", letterSpacing: 0.9, color: "#999", marginBottom: 7, marginLeft: 2, textTransform: "uppercase" },
-  planCard: { backgroundColor: "#fff", borderRadius: 16, padding: 8, flexDirection: "row", gap: 8, shadowColor: "#000", shadowOpacity: 0.06, shadowRadius: 12, shadowOffset: { width: 0, height: 2 }, elevation: 2 },
-  planSeg: { flex: 1, minHeight: 44, alignItems: "center", justifyContent: "center", backgroundColor: "#F5F5F5", borderRadius: 12, paddingHorizontal: 8 },
-  planSegDisabled: { opacity: 0.5 },
-  planSegText: { fontSize: 13, fontWeight: "700", color: "#555" },
-  planSegParada: { borderWidth: 1.5, borderColor: "#C97826", borderStyle: "dashed" },
-  planSegParadaText: { fontSize: 13, fontWeight: "700", color: "#C97826" },
-  planExtra: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 10, marginTop: 8, marginLeft: 2 },
-  saveChip: { backgroundColor: "#F5F5F5", borderRadius: 10, minHeight: 36, paddingHorizontal: 14, alignItems: "center", justifyContent: "center" },
-  saveChipText: { fontSize: 12.5, fontWeight: "700", color: "#555" },
-  microRow: { flexDirection: "row", alignItems: "center", gap: 6 },
-  microDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: "#C97826" },
-  microText: { fontSize: 11.5, fontWeight: "600", color: "#999" },
-  microTextOk: { fontSize: 12, fontWeight: "600", color: "#3F8F5F" },
-  zonePalco: { marginBottom: 20 },
-  cta: { width: "100%", minHeight: 58, borderRadius: 18, alignItems: "center", justifyContent: "center" },
-  ctaSolid: { backgroundColor: "#C97826", shadowColor: "#C97826", shadowOpacity: 0.4, shadowRadius: 20, shadowOffset: { width: 0, height: 4 }, elevation: 5 },
-  ctaSolidText: { color: "#fff", fontSize: 17, fontWeight: "800" },
-  ctaInverted: { backgroundColor: "#1A1A1A", borderWidth: 1.5, borderColor: "#C97826", shadowColor: "#C97826", shadowOpacity: 0.32, shadowRadius: 20, shadowOffset: { width: 0, height: 4 }, elevation: 5 },
-  ctaInvertedText: { color: "#C97826", fontSize: 17, fontWeight: "800" },
-  ctaLoading: { opacity: 0.5 },
-  rulesCardZone: { marginHorizontal: 0, marginTop: 0, marginBottom: 4 },
-  excluirRow: { alignItems: "center", marginTop: 16, marginBottom: 8 },
-  excluirText: { fontSize: 13, fontWeight: "600", color: "#E53935" },
+  // ===== Menu de ações da viagem (⋮ no card de resumo) + action sheet =====
+  summaryMenuBtn: { position: "absolute", top: 8, right: 8, width: 36, height: 36, borderRadius: 18, alignItems: "center", justifyContent: "center" },
+  summaryMenuIcon: { fontSize: 24, fontWeight: "800", color: "#555", lineHeight: 26 },
+  menuRow: { flexDirection: "row", alignItems: "center", gap: 14, paddingVertical: 14, paddingHorizontal: 4 },
+  menuRowPrimary: { backgroundColor: "#FDF3E7", borderRadius: 12, paddingHorizontal: 14, marginBottom: 4 },
+  menuRowDisabled: { opacity: 0.4 },
+  menuIcon: { fontSize: 18, width: 24, textAlign: "center" },
+  menuIconPrimary: { fontSize: 20, width: 24, textAlign: "center" },
+  menuLabel: { fontSize: 15, fontWeight: "600", color: "#1A1A1A" },
+  menuLabelPrimary: { fontSize: 16, fontWeight: "800", color: "#C97826" },
+  menuLabelDanger: { color: "#E53935", fontWeight: "700" },
+  menuNote: { fontSize: 11.5, color: "#999", marginTop: 2 },
+  menuDivider: { height: 1, backgroundColor: "#EEE", marginVertical: 6 },
+  menuCancel: { marginTop: 10, paddingVertical: 14, alignItems: "center", backgroundColor: "#F5F5F5", borderRadius: 12 },
+  menuCancelText: { fontSize: 15, fontWeight: "700", color: "#555" },
+  // Empty state — calcular rota
+  emptyCalcBtn: { marginTop: 14, backgroundColor: "#C97826", borderRadius: 12, paddingVertical: 12, paddingHorizontal: 22, alignItems: "center", justifyContent: "center", minHeight: 44 },
+  emptyCalcBtnText: { color: "#fff", fontSize: 15, fontWeight: "700" },
 
   notFound: { fontSize: 16, color: "#555", marginBottom: 12 },
   link: { color: "#C97826", fontSize: 15 },
