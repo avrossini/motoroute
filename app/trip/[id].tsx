@@ -22,6 +22,8 @@ import { calcularRoleRemoto } from "@/services/roleService";
 import { calcularExpedicaoRemota } from "@/services/expedicaoService";
 import type { Trecho } from "@/domain/route/types";
 import { useIsDesktopWeb } from "@/hooks/useIsDesktopWeb";
+import { useBoardColumns } from "@/hooks/useBoardColumns";
+import DayBoard from "@/components/DayBoard";
 import {
   fetchSegmentWeather,
   isWeatherAvailable,
@@ -239,6 +241,33 @@ function WeatherPanel({ seg, departureDate }: { seg: Segment; departureDate: str
   );
 }
 
+// Versão compacta do clima (1 linha) usada no board de Expedição, onde a coluna é
+// estreita demais para o painel lateral de 76px. Mantém os 3 estados do WeatherPanel.
+function WeatherLine({ seg, departureDate }: { seg: Segment; departureDate: string }) {
+  const segDate = segmentDate(departureDate, seg.day_index ?? 1);
+
+  if (!isWeatherAvailable(segDate)) {
+    return (
+      <Text style={styles.weatherLine} numberOfLines={1}>
+        🔒 Prev. em {daysUntilForecast(segDate)}d
+      </Text>
+    );
+  }
+  if (!seg.weather_condition) {
+    return (
+      <Text style={[styles.weatherLine, { color: "#9a9a9a" }]} numberOfLines={1}>
+        — sem previsão
+      </Text>
+    );
+  }
+  return (
+    <Text style={styles.weatherLine} numberOfLines={1}>
+      {weatherIcon(seg.weather_condition)} {seg.weather_temp_max != null ? `${seg.weather_temp_max}°` : "—"}
+      {"  ·  "}🌧 {seg.weather_rain_pct ?? 0}%{"  ·  "}💨 {seg.weather_wind_kmh ?? 0}km/h
+    </Text>
+  );
+}
+
 function DayHeader({
   label,
   date,
@@ -300,6 +329,7 @@ function SegmentCard({
   onStopPress,
   onAddPress,
   onNavigatePress,
+  compact = false,
 }: {
   seg: Segment;
   stop?: StopSuggestion;
@@ -309,6 +339,7 @@ function SegmentCard({
   onStopPress?: () => void;
   onAddPress?: () => void;
   onNavigatePress?: () => void;
+  compact?: boolean; // board de Expedição: clima em 1 linha, sem painel lateral de 76px
 }) {
   const alerts: string[] = (seg.alert_types as string[] | null) ?? [];
 
@@ -343,6 +374,7 @@ function SegmentCard({
               <Text style={styles.segDayEndLabel}>Fim Dia {seg.day_index}</Text>
             )}
           </View>
+          {compact && <WeatherLine seg={seg} departureDate={departureDate} />}
           {stop && (
             <TouchableOpacity style={styles.segStopCard} onPress={onStopPress} activeOpacity={0.7}>
               <Text style={styles.segStopIcon}>⛽</Text>
@@ -366,7 +398,7 @@ function SegmentCard({
             </TouchableOpacity>
           )}
         </View>
-        <WeatherPanel seg={seg} departureDate={departureDate} />
+        {!compact && <WeatherPanel seg={seg} departureDate={departureDate} />}
       </View>
       {alerts.length > 0 && (
         <View style={styles.segAlerts}>
@@ -486,6 +518,7 @@ export default function TripDetailScreen() {
   const [mergeExecuting, setMergeExecuting] = useState(false);
   const [activeView, setActiveView] = useState<"list" | "map">("list");
   const isDesktop = useIsDesktopWeb();
+  const board = useBoardColumns();
   const [fetchingWeather, setFetchingWeather] = useState(false);
   const [stops, setStops] = useState<Map<string, StopSuggestion>>(new Map());
   const [lodging, setLodging] = useState<Map<number, LodgingSuggestion>>(new Map());
@@ -1942,6 +1975,218 @@ export default function TripDetailScreen() {
     .map((s) => `Dia ${s.day_index}`)
     .filter((v, i, arr) => arr.indexOf(v) === i);
 
+  // Renderiza o card de UM dia. Reutilizado pela lista vertical (Rolê) e pelo board
+  // horizontal (Expedição). inBoard = Expedição: o card ocupa 100% da coluna e o clima
+  // do trecho vira 1 linha compacta (sem o painel lateral de 76px).
+  const renderDay = (grupo: GrupoCards, gi: number) => {
+    const inBoard = !isDayTrip;
+    const cardStyle = [styles.dayCard, inBoard ? styles.dayCardBoard : sideBySide && styles.dayCardHalf];
+    const daySegs = grupo.segs;
+    const dayIdx = gi + 1; // nº do dia (multi_day) / índice do grupo
+
+    // Dia parado (Expedição): sem segmentos, herda a cidade do dia anterior.
+    if (!isDayTrip && grupo.isRest) {
+      const restCity = tripDays.get(dayIdx)?.city_name ?? "";
+      return (
+        <View key={gi} style={cardStyle}>
+          <DayHeader
+            label={grupo.label}
+            date={segmentDate(trip.departure_date, dayIdx)}
+            originName={restCity}
+            destinName={restCity}
+            totalKm={0}
+          />
+          <View style={styles.restDayBody}>
+            <Text style={styles.restDayText}>🛌 Dia parado em {restCity || "—"}</Text>
+            <TouchableOpacity
+              style={[styles.restToggleBtn, (togglingRest !== null || calculating || trip.status === "active") && { opacity: 0.5 }]}
+              onPress={() => toggleRestDay(dayIdx)}
+              disabled={togglingRest !== null || calculating || trip.status === "active"}
+            >
+              {togglingRest === dayIdx ? (
+                <ActivityIndicator color="#C97826" />
+              ) : (
+                <Text style={styles.restToggleBtnText}>▶ Voltar a dia de viagem</Text>
+              )}
+            </TouchableOpacity>
+          </View>
+          {dayIdx < numDiasCal && (
+            <LodgingBlock
+              tripId={id}
+              dayIndex={dayIdx}
+              departureDate={trip.departure_date}
+              destCity={restCity}
+              lodgingItem={lodging.get(dayIdx)}
+              onReservedToggle={toggleReserved}
+              onSearchPress={() => openLodgingSearch(dayIdx, restCity)}
+            />
+          )}
+        </View>
+      );
+    }
+
+    if (daySegs.length === 0) return null;
+
+    const firstSeg = daySegs[0];
+    const lastSeg = daySegs[daySegs.length - 1];
+    const dayTotalKm = daySegs.reduce((sum, s) => sum + s.distance_km, 0);
+    // Rolê: sempre o dia de saída (ida e volta no mesmo dia). Expedição: soma os dias.
+    const dayDate = isDayTrip ? trip.departure_date : segmentDate(trip.departure_date, dayIdx);
+    // "Gerado" = mostra os trechos. Esqueleto (botão gerar) só quando há uma linha
+    // trip_days do dia com segments_generated=false. day_trip e multi_day antigo
+    // (sem trip_days) contam como gerados — não regride viagens já calculadas.
+    const diaGerado = isDayTrip || !tripDays.has(dayIdx) || !!tripDays.get(dayIdx)?.segments_generated;
+
+    return (
+      <View key={gi} style={cardStyle}>
+        <DayHeader
+          label={grupo.label}
+          date={dayDate}
+          originName={firstSeg.origin_name ?? ""}
+          destinName={lastSeg.destination_name ?? ""}
+          totalKm={dayTotalKm}
+          onEditCity={!isDayTrip && dayIdx < numDiasCal && trip.status !== "active"
+            && togglingRest === null && generatingDay === null && !savingCity ? () => {
+            setEditCityModal({ dayIndex: dayIdx, currentCity: lastSeg.destination_name ?? "" });
+            setWpQuery("");
+            setWpResults([]);
+          } : undefined}
+          onToggleRest={!isDayTrip && dayIdx > 1 && dayIdx < numDiasCal ? () => toggleRestDay(dayIdx) : undefined}
+        />
+        {/* Paradas obrigatórias deste dia (Expedição) */}
+        {!isDayTrip && (() => {
+          const paradasDoDia = waypoints.filter((w) => w.day_index === dayIdx);
+          if (paradasDoDia.length === 0) return null;
+          return (
+            <View style={styles.paradasRow}>
+              {paradasDoDia.map((wp) => (
+                <View key={wp.id} style={styles.paradaTag}>
+                  <Text style={styles.paradaTagText} numberOfLines={1}>📍 {wp.name}</Text>
+                  {trip.status !== "active" && (
+                    <TouchableOpacity
+                      onPress={() => deleteWaypoint(wp.id)}
+                      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                      disabled={calculating}
+                    >
+                      <Text style={styles.paradaTagRemove}>×</Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
+              ))}
+            </View>
+          );
+        })()}
+        {/* day alert banner — shown when daily distance exceeds 500 km */}
+        {dayTotalKm > 500 && (
+          <View style={styles.dayAlertBanner}>
+            <Text style={styles.dayAlertText}>
+              {dayTotalKm > 650
+                ? `⚠️ Dia intenso: ${Math.round(dayTotalKm)} km — acima do recomendado`
+                : `ℹ️ Dia puxado: ${Math.round(dayTotalKm)} km`}
+            </Text>
+          </View>
+        )}
+        <View style={styles.dayBody}>
+          {!diaGerado && (() => {
+            // Esqueleto do dia (Expedição): trechos ainda não gerados.
+            const skel = daySegs[0];
+            return (
+              <View key="skel">
+                {skel.alert_types?.includes("sem_cidade") && (
+                  <Text style={styles.pernoiteWarning}>
+                    ⚠️ Fim de dia sem cidade confirmada — confirme o local de pernoite
+                  </Text>
+                )}
+                <View style={styles.daySkeleton}>
+                  <Text style={styles.daySkelHint}>Trechos e postos ainda não detalhados</Text>
+                  <TouchableOpacity
+                    style={[styles.btnGerarDia, (generatingDay !== null || calculating || trip.status === "active") && { opacity: 0.5 }]}
+                    onPress={() => gerarTrechosDia(dayIdx)}
+                    disabled={generatingDay !== null || calculating || trip.status === "active"}
+                  >
+                    {generatingDay === dayIdx ? (
+                      <ActivityIndicator color="#fff" />
+                    ) : (
+                      <Text style={styles.btnGerarDiaText}>⚙ Gerar trechos deste dia</Text>
+                    )}
+                  </TouchableOpacity>
+                  {trip.status === "active" && (
+                    <Text style={styles.daySkelNote}>Gere os trechos antes de iniciar a viagem.</Text>
+                  )}
+                </View>
+                {dayIdx < numDiasCal && (
+                  <LodgingBlock
+                    tripId={id}
+                    dayIndex={dayIdx}
+                    departureDate={trip.departure_date}
+                    destCity={skel.destination_name ?? ""}
+                    lodgingItem={lodging.get(dayIdx)}
+                    onReservedToggle={toggleReserved}
+                    onSearchPress={() => openLodgingSearch(dayIdx, skel.destination_name ?? "")}
+                  />
+                )}
+              </View>
+            );
+          })()}
+          {diaGerado && daySegs.map((seg, segIdx) => {
+            const globalIdx = segments.indexOf(seg);
+            const isLastSeg = globalIdx === segments.length - 1;
+            const showLodging = seg.is_last_of_day && dayIdx < numDiasCal && !isDayTrip;
+            const depTime = segmentTimes.get(seg.id) ?? baseTime;
+
+            return (
+              <View key={seg.id}>
+                <SegmentCard
+                  seg={seg}
+                  stop={stops.get(seg.id)}
+                  showDayEnd={!isDayTrip}
+                  departureDate={trip.departure_date}
+                  departureTime={depTime}
+                  compact={inBoard}
+                  onStopPress={() => openStopAlternatives(seg.id)}
+                  onAddPress={isDayTrip ? () => {
+                    setAddWpModal({ segIndex: globalIdx, segment: seg });
+                    setWpQuery("");
+                    setWpResults([]);
+                  } : undefined}
+                  onNavigatePress={() => handleNavigate(seg)}
+                />
+                {isDayTrip && segIdx < daySegs.length - 1 && (
+                  <TouchableOpacity
+                    style={styles.mergeStopBtn}
+                    onPress={() => openMergeModal(seg, daySegs[segIdx + 1])}
+                  >
+                    <View style={styles.mergeStopLine} />
+                    <Text style={styles.mergeStopText}>✕ Remover parada</Text>
+                    <View style={styles.mergeStopLine} />
+                  </TouchableOpacity>
+                )}
+                {showLodging && (
+                  <>
+                    {tripDays.get(dayIdx)?.alert_types?.includes("sem_cidade") && (
+                      <Text style={styles.pernoiteWarning}>
+                        ⚠️ Fim de dia sem cidade confirmada — verifique o local de pernoite
+                      </Text>
+                    )}
+                    <LodgingBlock
+                      tripId={id}
+                      dayIndex={dayIdx}
+                      departureDate={trip.departure_date}
+                      destCity={seg.destination_name ?? seg.origin_name ?? ""}
+                      lodgingItem={lodging.get(dayIdx)}
+                      onReservedToggle={toggleReserved}
+                      onSearchPress={() => openLodgingSearch(dayIdx, seg.destination_name ?? "")}
+                    />
+                  </>
+                )}
+              </View>
+            );
+          })}
+        </View>
+      </View>
+    );
+  };
+
   return (
     <View style={styles.container}>
       <View style={styles.topBar}>
@@ -2015,7 +2260,7 @@ export default function TripDetailScreen() {
               style={[styles.toggleBtn, activeView === "list" && styles.toggleBtnActive]}
               onPress={() => setActiveView("list")}
             >
-              <Text style={activeView === "list" ? styles.toggleBtnActiveText : styles.toggleBtnText}>📋 Lista</Text>
+              <Text style={activeView === "list" ? styles.toggleBtnActiveText : styles.toggleBtnText}>{isDayTrip ? "📋 Lista" : "▦ Board"}</Text>
             </TouchableOpacity>
             <TouchableOpacity
               style={[styles.toggleBtn, activeView === "map" && styles.toggleBtnActive]}
@@ -2046,213 +2291,18 @@ export default function TripDetailScreen() {
               Toque em "Calcular Rota" para buscar os segmentos via Google Maps.
             </Text>
           </View>
+        ) : !isDayTrip ? (
+          // Expedição: board horizontal (colunas = dias). Ver useBoardColumns/DayBoard.
+          <DayBoard
+            columns={grupos.map(renderDay).filter(Boolean)}
+            colWidth={board.colWidth}
+            gap={board.gap}
+            numColumns={board.numColumns}
+          />
         ) : (
+          // Rolê (day_trip): mantém a lista vertical; Ida/Volta lado a lado no desktop.
           <View style={sideBySide ? styles.dayCardsRow : undefined}>
-          {grupos.map((grupo, gi) => {
-            const daySegs = grupo.segs;
-            const dayIdx = gi + 1; // nº do dia (multi_day) / índice do grupo
-
-            // Dia parado (Expedição): sem segmentos, herda a cidade do dia anterior.
-            if (!isDayTrip && grupo.isRest) {
-              const restCity = tripDays.get(dayIdx)?.city_name ?? "";
-              return (
-                <View key={gi} style={styles.dayCard}>
-                  <DayHeader
-                    label={grupo.label}
-                    date={segmentDate(trip.departure_date, dayIdx)}
-                    originName={restCity}
-                    destinName={restCity}
-                    totalKm={0}
-                  />
-                  <View style={styles.restDayBody}>
-                    <Text style={styles.restDayText}>🛌 Dia parado em {restCity || "—"}</Text>
-                    <TouchableOpacity
-                      style={[styles.restToggleBtn, (togglingRest !== null || calculating || trip.status === "active") && { opacity: 0.5 }]}
-                      onPress={() => toggleRestDay(dayIdx)}
-                      disabled={togglingRest !== null || calculating || trip.status === "active"}
-                    >
-                      {togglingRest === dayIdx ? (
-                        <ActivityIndicator color="#C97826" />
-                      ) : (
-                        <Text style={styles.restToggleBtnText}>▶ Voltar a dia de viagem</Text>
-                      )}
-                    </TouchableOpacity>
-                  </View>
-                  {dayIdx < numDiasCal && (
-                    <LodgingBlock
-                      tripId={id}
-                      dayIndex={dayIdx}
-                      departureDate={trip.departure_date}
-                      destCity={restCity}
-                      lodgingItem={lodging.get(dayIdx)}
-                      onReservedToggle={toggleReserved}
-                      onSearchPress={() => openLodgingSearch(dayIdx, restCity)}
-                    />
-                  )}
-                </View>
-              );
-            }
-
-            if (daySegs.length === 0) return null;
-
-            const firstSeg = daySegs[0];
-            const lastSeg = daySegs[daySegs.length - 1];
-            const dayTotalKm = daySegs.reduce((sum, s) => sum + s.distance_km, 0);
-            // Rolê: sempre o dia de saída (ida e volta no mesmo dia). Expedição: soma os dias.
-            const dayDate = isDayTrip ? trip.departure_date : segmentDate(trip.departure_date, dayIdx);
-            // "Gerado" = mostra os trechos. Esqueleto (botão gerar) só quando há uma linha
-            // trip_days do dia com segments_generated=false. day_trip e multi_day antigo
-            // (sem trip_days) contam como gerados — não regride viagens já calculadas.
-            const diaGerado = isDayTrip || !tripDays.has(dayIdx) || !!tripDays.get(dayIdx)?.segments_generated;
-
-            return (
-              <View key={gi} style={[styles.dayCard, sideBySide && styles.dayCardHalf]}>
-                <DayHeader
-                  label={grupo.label}
-                  date={dayDate}
-                  originName={firstSeg.origin_name ?? ""}
-                  destinName={lastSeg.destination_name ?? ""}
-                  totalKm={dayTotalKm}
-                  onEditCity={!isDayTrip && dayIdx < numDiasCal && trip.status !== "active"
-                    && togglingRest === null && generatingDay === null && !savingCity ? () => {
-                    setEditCityModal({ dayIndex: dayIdx, currentCity: lastSeg.destination_name ?? "" });
-                    setWpQuery("");
-                    setWpResults([]);
-                  } : undefined}
-                  onToggleRest={!isDayTrip && dayIdx > 1 && dayIdx < numDiasCal ? () => toggleRestDay(dayIdx) : undefined}
-                />
-                {/* Paradas obrigatórias deste dia (Expedição) */}
-                {!isDayTrip && (() => {
-                  const paradasDoDia = waypoints.filter((w) => w.day_index === dayIdx);
-                  if (paradasDoDia.length === 0) return null;
-                  return (
-                    <View style={styles.paradasRow}>
-                      {paradasDoDia.map((wp) => (
-                        <View key={wp.id} style={styles.paradaTag}>
-                          <Text style={styles.paradaTagText} numberOfLines={1}>📍 {wp.name}</Text>
-                          {trip.status !== "active" && (
-                            <TouchableOpacity
-                              onPress={() => deleteWaypoint(wp.id)}
-                              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                              disabled={calculating}
-                            >
-                              <Text style={styles.paradaTagRemove}>×</Text>
-                            </TouchableOpacity>
-                          )}
-                        </View>
-                      ))}
-                    </View>
-                  );
-                })()}
-                {/* day alert banner — shown when daily distance exceeds 500 km */}
-                {dayTotalKm > 500 && (
-                  <View style={styles.dayAlertBanner}>
-                    <Text style={styles.dayAlertText}>
-                      {dayTotalKm > 650
-                        ? `⚠️ Dia intenso: ${Math.round(dayTotalKm)} km — acima do recomendado`
-                        : `ℹ️ Dia puxado: ${Math.round(dayTotalKm)} km`}
-                    </Text>
-                  </View>
-                )}
-                <View style={styles.dayBody}>
-                  {!diaGerado && (() => {
-                    // Esqueleto do dia (Expedição): trechos ainda não gerados.
-                    const skel = daySegs[0];
-                    return (
-                      <View key="skel">
-                        {skel.alert_types?.includes("sem_cidade") && (
-                          <Text style={styles.pernoiteWarning}>
-                            ⚠️ Fim de dia sem cidade confirmada — confirme o local de pernoite
-                          </Text>
-                        )}
-                        <View style={styles.daySkeleton}>
-                          <Text style={styles.daySkelHint}>Trechos e postos ainda não detalhados</Text>
-                          <TouchableOpacity
-                            style={[styles.btnGerarDia, (generatingDay !== null || calculating || trip.status === "active") && { opacity: 0.5 }]}
-                            onPress={() => gerarTrechosDia(dayIdx)}
-                            disabled={generatingDay !== null || calculating || trip.status === "active"}
-                          >
-                            {generatingDay === dayIdx ? (
-                              <ActivityIndicator color="#fff" />
-                            ) : (
-                              <Text style={styles.btnGerarDiaText}>⚙ Gerar trechos deste dia</Text>
-                            )}
-                          </TouchableOpacity>
-                          {trip.status === "active" && (
-                            <Text style={styles.daySkelNote}>Gere os trechos antes de iniciar a viagem.</Text>
-                          )}
-                        </View>
-                        {dayIdx < numDiasCal && (
-                          <LodgingBlock
-                            tripId={id}
-                            dayIndex={dayIdx}
-                            departureDate={trip.departure_date}
-                            destCity={skel.destination_name ?? ""}
-                            lodgingItem={lodging.get(dayIdx)}
-                            onReservedToggle={toggleReserved}
-                            onSearchPress={() => openLodgingSearch(dayIdx, skel.destination_name ?? "")}
-                          />
-                        )}
-                      </View>
-                    );
-                  })()}
-                  {diaGerado && daySegs.map((seg, segIdx) => {
-                    const globalIdx = segments.indexOf(seg);
-                    const isLastSeg = globalIdx === segments.length - 1;
-                    const showLodging = seg.is_last_of_day && dayIdx < numDiasCal && !isDayTrip;
-                    const depTime = segmentTimes.get(seg.id) ?? baseTime;
-
-                    return (
-                      <View key={seg.id}>
-                        <SegmentCard
-                          seg={seg}
-                          stop={stops.get(seg.id)}
-                          showDayEnd={!isDayTrip}
-                          departureDate={trip.departure_date}
-                          departureTime={depTime}
-                          onStopPress={() => openStopAlternatives(seg.id)}
-                          onAddPress={isDayTrip ? () => {
-                            setAddWpModal({ segIndex: globalIdx, segment: seg });
-                            setWpQuery("");
-                            setWpResults([]);
-                          } : undefined}
-                          onNavigatePress={() => handleNavigate(seg)}
-                        />
-                        {isDayTrip && segIdx < daySegs.length - 1 && (
-                          <TouchableOpacity
-                            style={styles.mergeStopBtn}
-                            onPress={() => openMergeModal(seg, daySegs[segIdx + 1])}
-                          >
-                            <View style={styles.mergeStopLine} />
-                            <Text style={styles.mergeStopText}>✕ Remover parada</Text>
-                            <View style={styles.mergeStopLine} />
-                          </TouchableOpacity>
-                        )}
-                        {showLodging && (
-                          <>
-                            {tripDays.get(dayIdx)?.alert_types?.includes("sem_cidade") && (
-                              <Text style={styles.pernoiteWarning}>
-                                ⚠️ Fim de dia sem cidade confirmada — verifique o local de pernoite
-                              </Text>
-                            )}
-                            <LodgingBlock
-                              tripId={id}
-                              dayIndex={dayIdx}
-                              departureDate={trip.departure_date}
-                              destCity={seg.destination_name ?? seg.origin_name ?? ""}
-                              lodgingItem={lodging.get(dayIdx)}
-                              onReservedToggle={toggleReserved}
-                              onSearchPress={() => openLodgingSearch(dayIdx, seg.destination_name ?? "")}
-                            />
-                          </>
-                        )}
-                      </View>
-                    );
-                  })}
-                </View>
-              </View>
-            );
-          })}
+            {grupos.map(renderDay)}
           </View>
         )}
 
@@ -3020,6 +3070,10 @@ const styles = StyleSheet.create({
   },
   dayCardsRow: { flexDirection: "row", alignItems: "flex-start" },
   dayCardHalf: { flex: 1 },
+  // Board de Expedição: o card ocupa 100% da coluna; a margem/gap fica a cargo do DayBoard.
+  dayCardBoard: { width: "100%", marginHorizontal: 0, marginBottom: 0 },
+  // Clima compacto (1 linha) do board — substitui o painel lateral de 76px.
+  weatherLine: { marginTop: 6, marginBottom: 2, fontSize: 12, color: "#555", fontWeight: "600" },
   dayAlertBanner: {
     backgroundColor: "#FFF3CD",
     paddingHorizontal: 14,
