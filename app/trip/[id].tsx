@@ -376,7 +376,7 @@ function SegmentCard({
           </View>
           {compact && <WeatherLine seg={seg} departureDate={departureDate} />}
           {stop && (
-            <TouchableOpacity style={styles.segStopCard} onPress={onStopPress} activeOpacity={0.7}>
+            <TouchableOpacity style={styles.segStopCard} onPress={onStopPress} activeOpacity={0.7} accessibilityRole="button" accessibilityLabel="Ver alternativas de posto">
               <Text style={styles.segStopIcon}>⛽</Text>
               <View style={{ flex: 1 }}>
                 <Text style={styles.segStopName} numberOfLines={1}>{stop.name}</Text>
@@ -389,7 +389,7 @@ function SegmentCard({
                   <Text style={styles.segStopLowRating}>⚠ Avaliação baixa — confirme antes de ir</Text>
                 )}
               </View>
-              <Text style={styles.segStopAlt}>Ver alt. ›</Text>
+              <Text style={styles.segStopAlt}>⇄</Text>
             </TouchableOpacity>
           )}
           {onNavigatePress && (
@@ -3195,7 +3195,7 @@ const styles = StyleSheet.create({
   segStopName: { fontSize: 12, fontWeight: "600", color: "#1A1A1A" },
   segStopMeta: { fontSize: 10, color: "#888", marginTop: 1 },
   segStopLowRating: { fontSize: 10, color: "#C97826", marginTop: 2, fontWeight: "600" },
-  segStopAlt: { fontSize: 11, fontWeight: "700", color: "#2563EB", flexShrink: 0 },
+  segStopAlt: { fontSize: 18, lineHeight: 20, fontWeight: "700", color: "#2563EB", flexShrink: 0, paddingHorizontal: 2 },
   navigateBtn: {
     marginTop: 10, backgroundColor: "#C97826", borderRadius: 10,
     paddingVertical: 8, alignItems: "center",
