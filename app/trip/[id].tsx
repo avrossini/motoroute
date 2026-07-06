@@ -541,6 +541,7 @@ export default function TripDetailScreen() {
       originName: string; destName: string; km: number; min: number;
       originLat?: number | null; originLng?: number | null;
       destLat?: number | null; destLng?: number | null;
+      isArrival?: boolean;
     }>;
   } | null>(null);
   const [wpPreviewLoading, setWpPreviewLoading] = useState(false);
@@ -791,7 +792,12 @@ export default function TripDetailScreen() {
 
   async function fetchStops(segs: Segment[]) {
     const supabase = getSupabase();
-    const intermediateSegs = segs.slice(0, -1);
+    // Numa ida-e-volta (day_trip) a chegada da IDA (destino da viagem) é um trecho de
+    // chegada, sem posto — igual ao motor. slice(0,-1) tira só a chegada da VOLTA (o
+    // último); a virada precisa ser filtrada à parte para não pendurar um ⛽ indevido.
+    const isTurnaround = (seg: Segment) =>
+      trip?.trip_type === "day_trip" && !!trip?.round_trip && seg.destination_name === trip.destination;
+    const intermediateSegs = segs.slice(0, -1).filter((seg) => !isTurnaround(seg));
     if (intermediateSegs.length === 0) return;
 
     const { data: { user: authUser } } = await supabase.auth.getUser();
@@ -1112,6 +1118,9 @@ export default function TripDetailScreen() {
         originName: string; destName: string; km: number; min: number;
         originLat?: number | null; originLng?: number | null;
         destLat?: number | null; destLng?: number | null;
+        // Último sub-trecho da subdivisão (chegada ao waypoint/destino): o motor isenta
+        // a chegada da regra de km mínimo, então não deve receber alerta "trecho_curto".
+        isArrival?: boolean;
       };
 
       // Se um sub-trecho exceder max_stop_km, subdividi-lo com o motor buscar-primeiro
@@ -1121,13 +1130,13 @@ export default function TripDetailScreen() {
         oLat?: number | null, oLng?: number | null,
         dLat?: number | null, dLng?: number | null,
       ): Promise<NewSeg[]> {
-        if (km <= maxKm) return [{ originName, destName, km, min, originLat: oLat, originLng: oLng, destLat: dLat, destLng: dLng }];
+        if (km <= maxKm) return [{ originName, destName, km, min, originLat: oLat, originLng: oLng, destLat: dLat, destLng: dLng, isArrival: true }];
         const r = await calcularRoleRemoto({
           origem: { lat: Number(oLat), lng: Number(oLng), nome: originName },
           destino: { lat: Number(dLat), lng: Number(dLng), nome: destName },
           minStopKm: minKm, maxStopKm: maxKm, favoritos: [], idaEVolta: false,
         });
-        return r.trechos.map((t) => ({
+        return r.trechos.map((t, ti) => ({
           originName: t.origem.nome,
           destName: t.destino.nome,
           km: t.distanciaKm,
@@ -1136,6 +1145,7 @@ export default function TripDetailScreen() {
           originLng: t.origem.lng,
           destLat: t.destino.lat,
           destLng: t.destino.lng,
+          isArrival: ti === r.trechos.length - 1,
         }));
       }
 
@@ -1195,7 +1205,9 @@ export default function TripDetailScreen() {
         const isLast = i === newSegs.length - 1;
         const alerts: string[] = [];
         if (s.km > maxKm) alerts.push("trecho_longo");
-        if (s.km < minKm && !isLast) alerts.push("trecho_curto");
+        // isArrival (fim de subA = chegada ao waypoint, ou fim de subB = destino), não
+        // isLast do array combinado — senão a chegada ao waypoint ganha "trecho_curto".
+        if (s.km < minKm && !s.isArrival) alerts.push("trecho_curto");
         return {
           trip_id: id,
           order_index: origOrderIndex + i,
@@ -1227,7 +1239,7 @@ export default function TripDetailScreen() {
       await supabase.from("trips").update({
         total_distance_km: totalKm,
         total_duration_min: totalMin,
-        stop_count: Math.max(0, (freshAllSegs ?? []).length - 1),
+        stop_count: Math.max(0, (freshAllSegs ?? []).length - (trip.round_trip ? 2 : 1)),
       }).eq("id", id);
 
       // 6. Fetch postos e clima usando lista completa (fetchStops usa slice(0,-1) internamente)
@@ -1314,7 +1326,7 @@ export default function TripDetailScreen() {
       await supabase.from("trips").update({
         total_distance_km: totalKm,
         total_duration_min: totalMin,
-        stop_count: Math.max(0, (freshAllSegs ?? []).length - 1),
+        stop_count: Math.max(0, (freshAllSegs ?? []).length - (trip.round_trip ? 2 : 1)),
       }).eq("id", id);
 
       if (freshAllSegs && freshAllSegs.length > 0) {
@@ -1475,7 +1487,9 @@ export default function TripDetailScreen() {
         totals = {
           total_distance_km: result.totalKm,
           total_duration_min: result.totalMin,
-          stop_count: Math.max(0, result.trechos.length - 1),
+          // Postos = trechos menos as chegadas (sem posto): 1 na só-ida, 2 na ida-e-volta
+          // (chegada no destino + volta na origem).
+          stop_count: Math.max(0, result.trechos.length - (activeTripVal.round_trip ? 2 : 1)),
         };
       } else {
         // Expedição (multi_day): re-esqueleta preservando os dias parados existentes
