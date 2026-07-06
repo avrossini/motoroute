@@ -2306,104 +2306,133 @@ export default function TripDetailScreen() {
           </View>
         )}
 
-        {/* Parada obrigatória (Expedição) */}
-        {!isDayTrip && segments.length > 0 && (
-          <TouchableOpacity
-            style={[styles.btnParada, (calculating || savingParada || trip.status === "active") && { opacity: 0.5 }]}
-            onPress={() => { setAddParadaModal(true); setWpQuery(""); setWpResults([]); }}
-            disabled={calculating || savingParada || trip.status === "active"}
-          >
-            <Text style={styles.btnParadaText}>➕ Parada obrigatória</Text>
-          </TouchableOpacity>
-        )}
-
-        {/* Action buttons (D8). Recalcular fica desabilitado em viagem ativa (apagaria os
-            segments e orfanizaria os check-ins); o guard também vive em calcularRota. */}
-        <TouchableOpacity
-          style={[styles.btnCalc, (calculating || fetchingWeather || trip.status === "active") && { opacity: 0.6 }]}
-          onPress={() => {
-            if (segments.length === 0) { calcularRota(); return; }
-            setShowRecalcConfirm(true);
-          }}
-          disabled={calculating || fetchingWeather || trip.status === "active"}
-        >
-          {calculating ? (
-            <ActivityIndicator color="#fff" />
-          ) : (
-            <Text style={styles.btnCalcText}>
-              {segments.length === 0 ? "Calcular Rota" : "↻ Recalcular Rota"}
-            </Text>
+        {/* ===== Barra de ações — 3 zonas: Planejamento · Palco · Rodapé ===== */}
+        <View style={styles.actionsWrap}>
+          {trip.status === "active" && (
+            <View style={styles.stateBadgeActive}>
+              <Text style={styles.stateBadgeActiveText}>● EM ANDAMENTO</Text>
+            </View>
           )}
-        </TouchableOpacity>
+          {trip.status === "completed" && (
+            <View style={styles.stateBadgeDone}>
+              <Text style={styles.stateBadgeDoneText}>✓ CONCLUÍDA</Text>
+            </View>
+          )}
 
-        {segments.length > 0 && weatherAvailable && (
-          <TouchableOpacity
-            style={[styles.btnWeather, fetchingWeather && { opacity: 0.6 }]}
-            onPress={() => fetchWeather(segments, trip.departure_date)}
-            disabled={fetchingWeather || calculating}
-          >
-            {fetchingWeather ? (
-              <ActivityIndicator color="#C97826" />
-            ) : (
-              <Text style={styles.btnWeatherText}>
-                {hasWeatherData ? "Atualizar Clima" : "Buscar Previsão do Tempo"}
-              </Text>
-            )}
-          </TouchableOpacity>
-        )}
+          {/* ZONA 1 — Planejamento (utilitários) */}
+          {trip.status !== "completed" && (
+            <View style={styles.zone}>
+              <Text style={styles.zoneLabel}>PLANEJAMENTO</Text>
+              {segments.length === 0 ? (
+                <View style={styles.planCard}>
+                  <TouchableOpacity
+                    style={[styles.planSeg, (calculating || fetchingWeather) && styles.planSegDisabled]}
+                    onPress={() => calcularRota()}
+                    disabled={calculating || fetchingWeather}
+                  >
+                    {calculating ? <ActivityIndicator color="#555" /> : <Text style={styles.planSegText}>Calcular Rota</Text>}
+                  </TouchableOpacity>
+                </View>
+              ) : (
+                <>
+                  <View style={styles.planCard}>
+                    {/* Recalcular — bloqueado na viagem ativa (apagaria segments/órfãos de check-in) */}
+                    <TouchableOpacity
+                      style={[styles.planSeg, (calculating || fetchingWeather || trip.status === "active") && styles.planSegDisabled]}
+                      onPress={() => setShowRecalcConfirm(true)}
+                      disabled={calculating || fetchingWeather || trip.status === "active"}
+                    >
+                      {calculating ? <ActivityIndicator color="#555" /> : (
+                        <Text style={styles.planSegText}>{trip.status === "active" ? "🔒 Recalcular" : "↻ Recalcular"}</Text>
+                      )}
+                    </TouchableOpacity>
+                    {weatherAvailable && (
+                      <TouchableOpacity
+                        style={[styles.planSeg, (fetchingWeather || calculating) && styles.planSegDisabled]}
+                        onPress={() => fetchWeather(segments, trip.departure_date)}
+                        disabled={fetchingWeather || calculating}
+                      >
+                        {fetchingWeather ? <ActivityIndicator color="#555" /> : (
+                          <Text style={styles.planSegText}>{hasWeatherData ? "Atualizar Clima" : "Buscar Clima"}</Text>
+                        )}
+                      </TouchableOpacity>
+                    )}
+                    {/* Parada obrigatória — só Expedição, fora da viagem ativa */}
+                    {!isDayTrip && trip.status !== "active" && (
+                      <TouchableOpacity
+                        style={[styles.planSeg, styles.planSegParada, (calculating || savingParada) && styles.planSegDisabled]}
+                        onPress={() => { setAddParadaModal(true); setWpQuery(""); setWpResults([]); }}
+                        disabled={calculating || savingParada}
+                      >
+                        <Text style={styles.planSegParadaText}>➕ Parada</Text>
+                      </TouchableOpacity>
+                    )}
+                  </View>
+                  {trip.status === "planned" && (
+                    <View style={styles.planExtra}>
+                      <TouchableOpacity
+                        style={[styles.saveChip, (calculating || fetchingWeather) && styles.planSegDisabled]}
+                        onPress={saveTrip}
+                        disabled={calculating || fetchingWeather}
+                      >
+                        <Text style={styles.saveChipText}>💾 Salvar rascunho</Text>
+                      </TouchableOpacity>
+                      <View style={styles.microRow}>
+                        <View style={styles.microDot} />
+                        <Text style={styles.microText}>rascunho não salvo</Text>
+                      </View>
+                    </View>
+                  )}
+                  {trip.status === "saved" && (
+                    <View style={styles.planExtra}>
+                      <Text style={styles.microTextOk}>✓ Salva — está nas suas viagens</Text>
+                    </View>
+                  )}
+                </>
+              )}
+            </View>
+          )}
 
-        {segments.length > 0 && (trip.status === "planned" || trip.status === "saved") && (
-          <View style={styles.btnRow}>
-            {trip.status === "planned" && (
+          {/* ZONA 2 — Palco (a ação principal, sozinha e dominante) */}
+          {segments.length > 0 && (trip.status === "planned" || trip.status === "saved") && (
+            <View style={styles.zonePalco}>
               <TouchableOpacity
-                style={[styles.btnSave, (calculating || fetchingWeather) && { opacity: 0.5 }]}
-                onPress={saveTrip}
+                style={[styles.cta, isDesktop ? styles.ctaSolid : styles.ctaInverted, (calculating || fetchingWeather) && styles.ctaLoading]}
+                onPress={startTrip}
                 disabled={calculating || fetchingWeather}
               >
-                <Text style={styles.btnSaveText}>💾 Salvar</Text>
+                <Text style={isDesktop ? styles.ctaSolidText : styles.ctaInvertedText}>🏍 Iniciar Viagem</Text>
               </TouchableOpacity>
-            )}
-            <TouchableOpacity
-              style={[styles.btnStart, { flex: 1 }, (calculating || fetchingWeather) && { opacity: 0.5 }]}
-              onPress={startTrip}
-              disabled={calculating || fetchingWeather}
-            >
-              <Text style={styles.btnStartText}>🏍 Iniciar Viagem</Text>
-            </TouchableOpacity>
-          </View>
-        )}
+            </View>
+          )}
+          {trip.status === "active" && (
+            <View style={styles.zonePalco}>
+              <TouchableOpacity
+                style={[styles.cta, styles.ctaSolid]}
+                onPress={() => router.push(`/trip/${id}/active` as any)}
+              >
+                <Text style={styles.ctaSolidText}>▶ Continuar Viagem</Text>
+              </TouchableOpacity>
+            </View>
+          )}
 
-        {trip.status === "active" && (
-          <TouchableOpacity
-            style={styles.btnContinue}
-            onPress={() => router.push(`/trip/${id}/active` as any)}
-          >
-            <Text style={styles.btnContinueText}>▶ Continuar Viagem</Text>
-          </TouchableOpacity>
-        )}
-
-        {trip.status !== "completed" && (
-          <TouchableOpacity
-            style={[styles.btnDelete, deleting && { opacity: 0.5 }]}
-            onPress={() => setShowDeleteConfirm(true)}
-            disabled={deleting}
-          >
-            {deleting ? (
-              <ActivityIndicator color="#fff" />
-            ) : (
-              <Text style={styles.btnDeleteText}>Excluir viagem</Text>
-            )}
-          </TouchableOpacity>
-        )}
-
-        {segments.length > 0 && trip.max_stop_km != null && (
-          <View style={styles.rulesCard}>
-            <Text style={styles.rulesTitle}>REGRAS DA VIAGEM</Text>
-            <Text style={styles.rulesLine}>
-              Paradas: {trip.min_stop_km}–{trip.max_stop_km} km entre cada uma
-            </Text>
-          </View>
-        )}
+          {/* ZONA 3 — Rodapé (regras + excluir discreto) */}
+          {segments.length > 0 && trip.max_stop_km != null && (
+            <View style={[styles.rulesCard, styles.rulesCardZone]}>
+              <Text style={styles.rulesTitle}>REGRAS DA VIAGEM</Text>
+              <Text style={styles.rulesLine}>
+                Paradas: {trip.min_stop_km}–{trip.max_stop_km} km entre cada uma
+              </Text>
+            </View>
+          )}
+          {trip.status !== "completed" && (
+            <View style={styles.excluirRow}>
+              <TouchableOpacity onPress={() => setShowDeleteConfirm(true)} disabled={deleting} accessibilityRole="button" accessibilityLabel="Excluir viagem">
+                {deleting ? <ActivityIndicator color="#E53935" /> : <Text style={styles.excluirText}>🗑 Excluir viagem</Text>}
+              </TouchableOpacity>
+            </View>
+          )}
+        </View>
 
         {/* Stop alternatives modal */}
         <Modal
@@ -3316,6 +3345,38 @@ const styles = StyleSheet.create({
   },
   rulesTitle: { fontSize: 10, fontWeight: "700", color: "#C97826", letterSpacing: 0.8, marginBottom: 4 },
   rulesLine: { fontSize: 13, color: "#7C4A00" },
+
+  // ===== Barra de ações redesenhada (3 zonas: Planejamento · Palco · Rodapé) =====
+  actionsWrap: { width: "100%", maxWidth: 560, alignSelf: "center", paddingHorizontal: 16, marginTop: 10 },
+  stateBadgeActive: { alignSelf: "flex-start", backgroundColor: "#16A34A", borderRadius: 20, paddingHorizontal: 10, paddingVertical: 4, marginBottom: 14, marginLeft: 2 },
+  stateBadgeActiveText: { color: "#fff", fontSize: 10, fontWeight: "800", letterSpacing: 0.5 },
+  stateBadgeDone: { alignSelf: "flex-start", backgroundColor: "#E7E4E0", borderRadius: 20, paddingHorizontal: 10, paddingVertical: 4, marginBottom: 14, marginLeft: 2 },
+  stateBadgeDoneText: { color: "#555", fontSize: 10, fontWeight: "800", letterSpacing: 0.5 },
+  zone: { marginBottom: 20 },
+  zoneLabel: { fontSize: 10, fontWeight: "800", letterSpacing: 0.9, color: "#999", marginBottom: 7, marginLeft: 2, textTransform: "uppercase" },
+  planCard: { backgroundColor: "#fff", borderRadius: 16, padding: 8, flexDirection: "row", gap: 8, shadowColor: "#000", shadowOpacity: 0.06, shadowRadius: 12, shadowOffset: { width: 0, height: 2 }, elevation: 2 },
+  planSeg: { flex: 1, minHeight: 44, alignItems: "center", justifyContent: "center", backgroundColor: "#F5F5F5", borderRadius: 12, paddingHorizontal: 8 },
+  planSegDisabled: { opacity: 0.5 },
+  planSegText: { fontSize: 13, fontWeight: "700", color: "#555" },
+  planSegParada: { borderWidth: 1.5, borderColor: "#C97826", borderStyle: "dashed" },
+  planSegParadaText: { fontSize: 13, fontWeight: "700", color: "#C97826" },
+  planExtra: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 10, marginTop: 8, marginLeft: 2 },
+  saveChip: { backgroundColor: "#F5F5F5", borderRadius: 10, minHeight: 36, paddingHorizontal: 14, alignItems: "center", justifyContent: "center" },
+  saveChipText: { fontSize: 12.5, fontWeight: "700", color: "#555" },
+  microRow: { flexDirection: "row", alignItems: "center", gap: 6 },
+  microDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: "#C97826" },
+  microText: { fontSize: 11.5, fontWeight: "600", color: "#999" },
+  microTextOk: { fontSize: 12, fontWeight: "600", color: "#3F8F5F" },
+  zonePalco: { marginBottom: 20 },
+  cta: { width: "100%", minHeight: 58, borderRadius: 18, alignItems: "center", justifyContent: "center" },
+  ctaSolid: { backgroundColor: "#C97826", shadowColor: "#C97826", shadowOpacity: 0.4, shadowRadius: 20, shadowOffset: { width: 0, height: 4 }, elevation: 5 },
+  ctaSolidText: { color: "#fff", fontSize: 17, fontWeight: "800" },
+  ctaInverted: { backgroundColor: "#1A1A1A", borderWidth: 1.5, borderColor: "#C97826", shadowColor: "#C97826", shadowOpacity: 0.32, shadowRadius: 20, shadowOffset: { width: 0, height: 4 }, elevation: 5 },
+  ctaInvertedText: { color: "#C97826", fontSize: 17, fontWeight: "800" },
+  ctaLoading: { opacity: 0.5 },
+  rulesCardZone: { marginHorizontal: 0, marginTop: 0, marginBottom: 4 },
+  excluirRow: { alignItems: "center", marginTop: 16, marginBottom: 8 },
+  excluirText: { fontSize: 13, fontWeight: "600", color: "#E53935" },
 
   notFound: { fontSize: 16, color: "#555", marginBottom: 12 },
   link: { color: "#C97826", fontSize: 15 },
