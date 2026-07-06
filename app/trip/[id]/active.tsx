@@ -19,6 +19,7 @@ import type { Database } from "@/types/database";
 type Trip = Database["public"]["Tables"]["trips"]["Row"];
 type Segment = Database["public"]["Tables"]["segments"]["Row"];
 type Checkin = Database["public"]["Tables"]["checkins"]["Row"];
+type TripDay = Database["public"]["Tables"]["trip_days"]["Row"];
 
 const RAIN_ALERT_THRESHOLD = 40;
 
@@ -27,6 +28,9 @@ const ALERT_LABELS: Record<string, string> = {
   trecho_curto: "Trecho curto (<100km)",
   chuva_forte: "Chuva provável neste trecho",
   vento_forte: "Vento forte neste trecho",
+  dia_puxado: "Dia puxado (muitos km)",
+  dia_extremo: "Dia muito longo",
+  sem_cidade: "Cidade de pernoite a confirmar",
 };
 
 function fmtKm(km: number) {
@@ -61,6 +65,7 @@ export default function ActiveTripScreen() {
   const [trip, setTrip] = useState<Trip | null>(null);
   const [segments, setSegments] = useState<Segment[]>([]);
   const [checkins, setCheckins] = useState<Checkin[]>([]);
+  const [restDays, setRestDays] = useState<TripDay[]>([]);
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState(false);
   const [userId, setUserId] = useState<string | null>(null);
@@ -75,7 +80,7 @@ export default function ActiveTripScreen() {
     } = await supabase.auth.getUser();
     setUserId(user?.id ?? null);
 
-    const [{ data: tripData }, { data: segsData }, { data: checkinsData }] =
+    const [{ data: tripData }, { data: segsData }, { data: checkinsData }, { data: restDaysData }] =
       await Promise.all([
         supabase.from("trips").select("*").eq("id", id).single(),
         supabase
@@ -84,11 +89,20 @@ export default function ActiveTripScreen() {
           .eq("trip_id", id)
           .order("order_index", { ascending: true }),
         supabase.from("checkins").select("*").eq("trip_id", id),
+        // Dias parados (Expedição): não têm segmento, então precisam ser lidos à parte
+        // para aparecerem na trilha de progresso. day_trip não tem trip_days → [].
+        supabase
+          .from("trip_days")
+          .select("*")
+          .eq("trip_id", id)
+          .eq("is_rest_day", true)
+          .order("day_index", { ascending: true }),
       ]);
 
     setTrip(tripData);
     setSegments(segsData ?? []);
     setCheckins(checkinsData ?? []);
+    setRestDays(restDaysData ?? []);
     setLoading(false);
   }
 
@@ -308,41 +322,65 @@ export default function ActiveTripScreen() {
                 />
               </View>
               <View style={styles.stopsRow}>
-                {segments.map((seg, i) => {
-                  const c = checkinMap.get(seg.id);
-                  const isDone = c != null && !c.skipped;
-                  const isSkipped = c != null && c.skipped;
-                  const isCurrent = i === currentIndex;
-                  const shortName =
-                    i === 0
-                      ? seg.origin_name.split(",")[0]
-                      : seg.destination_name.split(",")[0];
-                  return (
-                    <View key={seg.id} style={styles.stopItem}>
-                      <View
-                        style={[
-                          styles.stopDot,
-                          isDone && styles.stopDotDone,
-                          isSkipped && styles.stopDotSkipped,
-                          isCurrent && styles.stopDotCurrent,
-                        ]}
-                      >
-                        {isDone && (
-                          <Text style={styles.stopCheck}>✓</Text>
-                        )}
+                {(() => {
+                  // Intercala os dias parados (sem segmento) na trilha, na posição de
+                  // calendário certa: um rest day de day_index R aparece antes do primeiro
+                  // segmento cujo day_index > R. Marcador é read-only (não entra no check-in).
+                  const nodes: any[] = [];
+                  let ri = 0;
+                  const pushRestsBefore = (dayIdx: number) => {
+                    while (ri < restDays.length && restDays[ri].day_index < dayIdx) {
+                      const rd = restDays[ri++];
+                      const city = (rd.city_name ?? "").split(",")[0] || "Descanso";
+                      nodes.push(
+                        <View key={`rest-${rd.day_index}`} style={styles.stopItem}>
+                          <View style={[styles.stopDot, styles.stopDotRest]}>
+                            <Text style={styles.stopRestIcon}>🛌</Text>
+                          </View>
+                          <Text style={styles.stopName} numberOfLines={1}>
+                            {city}
+                          </Text>
+                        </View>
+                      );
+                    }
+                  };
+                  segments.forEach((seg, i) => {
+                    pushRestsBefore(seg.day_index ?? 1);
+                    const c = checkinMap.get(seg.id);
+                    const isDone = c != null && !c.skipped;
+                    const isSkipped = c != null && c.skipped;
+                    const isCurrent = i === currentIndex;
+                    const shortName =
+                      i === 0
+                        ? seg.origin_name.split(",")[0]
+                        : seg.destination_name.split(",")[0];
+                    nodes.push(
+                      <View key={seg.id} style={styles.stopItem}>
+                        <View
+                          style={[
+                            styles.stopDot,
+                            isDone && styles.stopDotDone,
+                            isSkipped && styles.stopDotSkipped,
+                            isCurrent && styles.stopDotCurrent,
+                          ]}
+                        >
+                          {isDone && <Text style={styles.stopCheck}>✓</Text>}
+                        </View>
+                        <Text
+                          style={[
+                            styles.stopName,
+                            isCurrent && styles.stopNameCurrent,
+                          ]}
+                          numberOfLines={1}
+                        >
+                          {shortName}
+                        </Text>
                       </View>
-                      <Text
-                        style={[
-                          styles.stopName,
-                          isCurrent && styles.stopNameCurrent,
-                        ]}
-                        numberOfLines={1}
-                      >
-                        {shortName}
-                      </Text>
-                    </View>
-                  );
-                })}
+                    );
+                  });
+                  pushRestsBefore(Number.MAX_SAFE_INTEGER); // dias parados no fim
+                  return nodes;
+                })()}
               </View>
             </View>
 
@@ -396,7 +434,7 @@ export default function ActiveTripScreen() {
         <Pressable style={styles.modalOverlay} onPress={() => setCheckinModal(false)}>
           <Pressable style={styles.modalSheet} onPress={() => {}}>
             <View style={styles.modalHandle} />
-            <Text style={styles.modalTitle}>Check-in em {currentSeg?.dest_name}</Text>
+            <Text style={styles.modalTitle}>Check-in em {currentSeg?.destination_name}</Text>
 
             <Text style={styles.modalLabel}>KM atual do odômetro (opcional)</Text>
             <TextInput
@@ -552,6 +590,8 @@ const styles = StyleSheet.create({
   stopDotDone: { backgroundColor: "#22C55E", borderColor: "#22C55E" },
   stopDotSkipped: { backgroundColor: "#444", borderColor: "#444" },
   stopDotCurrent: { backgroundColor: "#C97826", borderColor: "#C97826" },
+  stopDotRest: { backgroundColor: "#2A2620", borderColor: "#C97826", borderStyle: "dashed" },
+  stopRestIcon: { fontSize: 11 },
   stopCheck: { fontSize: 10, color: "#fff", fontWeight: "800" },
   stopName: { fontSize: 9, color: "#555", textAlign: "center" },
   stopNameCurrent: { color: "#C97826", fontWeight: "700" },
