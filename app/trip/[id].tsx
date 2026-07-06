@@ -896,6 +896,19 @@ export default function TripDetailScreen() {
 
   async function startTrip() {
     if (!trip) return;
+    // Expedição: não iniciar com dias de deslocamento ainda em esqueleto — a tela de
+    // viagem ativa é 1:1 por segmento e mostraria o placeholder do dia como uma perna
+    // única e gigante, sem postos. Dias parados não têm segmento e são ignorados aqui.
+    if (trip.trip_type !== "day_trip") {
+      const pendente = [...tripDays.values()].some((td) => !td.is_rest_day && !td.segments_generated);
+      if (pendente) {
+        Alert.alert(
+          "Gere os trechos primeiro",
+          "Antes de iniciar a viagem, gere os trechos de todos os dias de deslocamento da expedição."
+        );
+        return;
+      }
+    }
     const supabase = getSupabase();
     await supabase
       .from("trips")
@@ -1405,6 +1418,13 @@ export default function TripDetailScreen() {
   async function calcularRota(tripOverride?: typeof trip) {
     const activeTripVal = tripOverride ?? trip;
     if (!activeTripVal) return;
+    // Guard na função (não só nos botões): recalcular apaga+recria todos os segments, o
+    // que orfanizaria os check-ins de uma viagem em andamento. Funil de Recalcular e de
+    // deleteWaypoint; adicionarParada já tem o próprio guard antes de chamar aqui.
+    if (activeTripVal.status === "active") {
+      Alert.alert("Viagem em andamento", "Não é possível recalcular a rota com a viagem já iniciada.");
+      return;
+    }
     setCalculating(true);
     try {
       const supabase = getSupabase();
@@ -1613,6 +1633,12 @@ export default function TripDetailScreen() {
   // e recomputa os km via directions-simple. Não mexe nos outros dias.
   async function editarCidadeDia(geo: GeoResult) {
     if (!editCityModal || !trip) return;
+    // Trocar a cidade apaga+recria os segments do dia (novos UUIDs) — orfanizaria os
+    // check-ins numa viagem em andamento. Mesmo guard de gerar/parar/parada.
+    if (trip.status === "active") {
+      Alert.alert("Viagem em andamento", "Não é possível trocar a cidade de pernoite com a viagem já iniciada.");
+      return;
+    }
     const D = editCityModal.dayIndex;
     const cityPlaceId = (geo as any).place_id ?? null;
     setSavingCity(true);
@@ -2019,7 +2045,7 @@ export default function TripDetailScreen() {
                   originName={firstSeg.origin_name ?? ""}
                   destinName={lastSeg.destination_name ?? ""}
                   totalKm={dayTotalKm}
-                  onEditCity={!isDayTrip && dayIdx < numDiasCal ? () => {
+                  onEditCity={!isDayTrip && dayIdx < numDiasCal && trip.status !== "active" ? () => {
                     setEditCityModal({ dayIndex: dayIdx, currentCity: lastSeg.destination_name ?? "" });
                     setWpQuery("");
                     setWpResults([]);
@@ -2172,14 +2198,15 @@ export default function TripDetailScreen() {
           </TouchableOpacity>
         )}
 
-        {/* Action buttons (D8) */}
+        {/* Action buttons (D8). Recalcular fica desabilitado em viagem ativa (apagaria os
+            segments e orfanizaria os check-ins); o guard também vive em calcularRota. */}
         <TouchableOpacity
-          style={[styles.btnCalc, (calculating || fetchingWeather) && { opacity: 0.6 }]}
+          style={[styles.btnCalc, (calculating || fetchingWeather || trip.status === "active") && { opacity: 0.6 }]}
           onPress={() => {
             if (segments.length === 0) { calcularRota(); return; }
             setShowRecalcConfirm(true);
           }}
-          disabled={calculating || fetchingWeather}
+          disabled={calculating || fetchingWeather || trip.status === "active"}
         >
           {calculating ? (
             <ActivityIndicator color="#fff" />
