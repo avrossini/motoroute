@@ -20,13 +20,14 @@ export async function fetchSegmentWeather(
   return data;
 }
 
-/** Returns true if the departure date is within the 7-day forecast window */
+/** Returns true if the departure date is within the 7-day forecast window (hoje..+7).
+ *  Datas passadas (diffDays < 0) NÃO têm previsão — a WeatherAPI só serve futuro. */
 export function isWeatherAvailable(departureDate: string): boolean {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   const tripDate = new Date(departureDate + "T00:00:00");
   const diffDays = Math.ceil((tripDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
-  return diffDays <= 7;
+  return diffDays >= 0 && diffDays <= 7;
 }
 
 /** How many days until the forecast window opens (0 if already available) */
