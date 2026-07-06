@@ -1743,8 +1743,9 @@ export default function TripDetailScreen() {
   }
 
   // Expedição: adiciona uma parada obrigatória (waypoint). Re-esqueleta (a rota passa
-  // pela parada e ela é bucketada num dia). Re-esqueletar reseta dias parados (como o
-  // recálculo); as paradas são preservadas (persistidas em waypoints).
+  // pela parada e ela é bucketada num dia). O re-esqueleto (calcularRota) é rest-day-aware:
+  // PRESERVA os dias parados e as demais paradas (persistidas em waypoints); os trechos já
+  // detalhados voltam ao esqueleto.
   async function adicionarParada(geo: GeoResult) {
     if (!trip) return;
     if (trip.status === "active") {
@@ -1836,6 +1837,19 @@ export default function TripDetailScreen() {
   // No desktop, Ida e Volta (2 cards) ficam lado a lado; no mobile, empilhados.
   const sideBySide = isDesktop && !!isDayTrip && !!trip?.round_trip && grupos.length === 2;
 
+  // Dias com alerta de chuva/vento (D6). Recomputado dos segments: após um re-esqueleto
+  // (editar cidade / recalcular) os segments perdem os alertas até "Atualizar Clima", então
+  // a lista pode ficar vazia mesmo com trip.has_weather_alert ainda true — nesse caso o
+  // banner não deve renderizar (evita "Alertas climáticos em" sem nenhum dia).
+  const diasComAlertaClimatico = segments
+    .filter((s) =>
+      (s.alert_types as string[] | null)?.some(
+        (a) => a.startsWith("chuva") || a.startsWith("vento")
+      )
+    )
+    .map((s) => `Dia ${s.day_index}`)
+    .filter((v, i, arr) => arr.indexOf(v) === i);
+
   return (
     <View style={styles.container}>
       <View style={styles.topBar}>
@@ -1921,20 +1935,11 @@ export default function TripDetailScreen() {
         )}
 
         {/* Global weather alert banner (D6) */}
-        {hasWeatherAlert && segments.length > 0 && (
+        {hasWeatherAlert && diasComAlertaClimatico.length > 0 && (
           <View style={styles.alertBanner}>
             <Text style={styles.alertBannerIcon}>⚠️</Text>
             <Text style={styles.alertBannerText}>
-              Alertas climáticos em{" "}
-              {segments
-                .filter((s) =>
-                  (s.alert_types as string[] | null)?.some(
-                    (a) => a.startsWith("chuva") || a.startsWith("vento")
-                  )
-                )
-                .map((s) => `Dia ${s.day_index}`)
-                .filter((v, i, arr) => arr.indexOf(v) === i)
-                .join(", ")}
+              Alertas climáticos em {diasComAlertaClimatico.join(", ")}
             </Text>
           </View>
         )}
@@ -2682,7 +2687,8 @@ export default function TripDetailScreen() {
               <Text style={styles.modalTitle}>Parada obrigatória</Text>
               <Text style={styles.editCitySub}>
                 A rota vai passar por este ponto e ele vira uma parada fixa no dia em que cair.
-                Adicionar refaz a divisão em dias (reseta dias parados; as paradas são mantidas).
+                Adicionar refaz a divisão em dias; os dias parados e as demais paradas são
+                mantidos, e os trechos já detalhados voltam ao esqueleto.
               </Text>
               <View style={styles.wpSearchRow}>
                 <TextInput
