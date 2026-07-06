@@ -1051,6 +1051,12 @@ export default function TripDetailScreen() {
   }
 
   function openLodgingSearch(dayIndex: number, destCity: string) {
+    // Dia "sem cidade": não faz sentido buscar hospedagem pela string "Local a confirmar"
+    // (o geocode não resolve). Pede para definir a cidade de pernoite primeiro.
+    if (!destCity.trim() || destCity === "Local a confirmar") {
+      Alert.alert("Cidade a confirmar", "Defina a cidade de pernoite deste dia (✎ cidade) antes de buscar hospedagem.");
+      return;
+    }
     const checkin = addDays(trip!.departure_date, dayIndex - 1);
     const checkout = addDays(trip!.departure_date, dayIndex);
     router.push(
@@ -1611,7 +1617,11 @@ export default function TripDetailScreen() {
       // Substitui os segmentos deste dia (o placeholder ou uma geração anterior).
       await supabase.from("segments").delete().eq("trip_id", id).eq("day_index", dayIndex);
       await supabase.from("segments").insert(novos);
-      await supabase.from("trip_days").update({ segments_generated: true }).eq("trip_id", id).eq("day_index", dayIndex);
+      // Atualiza o cache de km/duração do dia com o total REAL dos trechos gerados (o
+      // esqueleto guardava a estimativa cidade-a-cidade) — trip_days fica consistente.
+      const diaKm = Math.round(novos.reduce((s, n) => s + (n.distance_km ?? 0), 0) * 10) / 10;
+      const diaMin = novos.reduce((s, n) => s + (n.duration_minutes ?? 0), 0);
+      await supabase.from("trip_days").update({ segments_generated: true, km_dia: diaKm, duration_min: diaMin }).eq("trip_id", id).eq("day_index", dayIndex);
 
       // Recalcula os totais da viagem a partir de TODOS os segmentos.
       const { data: allSegs } = await supabase
@@ -2021,7 +2031,9 @@ export default function TripDetailScreen() {
           <View style={styles.alertBanner}>
             <Text style={styles.alertBannerIcon}>⚠️</Text>
             <Text style={styles.alertBannerText}>
-              Alertas climáticos em {diasComAlertaClimatico.join(", ")}
+              {isDayTrip
+                ? "Alertas climáticos previstos na rota"
+                : `Alertas climáticos em ${diasComAlertaClimatico.join(", ")}`}
             </Text>
           </View>
         )}
