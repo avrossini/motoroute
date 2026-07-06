@@ -155,8 +155,16 @@ export async function dividirEmTrechos(
 
     let parada: Parada;
     if (faltamParadas && paradasKm[mIdx].km <= atualKm + faixa.max + 1e-6) {
+      const pk = paradasKm[mIdx];
+      // Parada praticamente na origem do trecho ou no destino final → não crava (evitaria
+      // um trecho de ~0 km); a rota já passa por ela, que é o próprio extremo do trecho.
+      const EPS_KM = 2;
+      if (pk.km - atualKm < EPS_KM || total - pk.km < EPS_KM) {
+        mIdx++;
+        continue;
+      }
       // parada obrigatória alcançável neste trecho → crava (precedência sobre 100-200)
-      const po = paradasKm[mIdx].p;
+      const po = pk.p;
       parada = { ponto: { lat: po.lat, lng: po.lng }, posto: null, nome: po.nome, alertaExtra: null, mandatory: true };
       mIdx++;
     } else {

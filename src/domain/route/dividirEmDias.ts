@@ -145,7 +145,18 @@ export async function dividirEmDias(
     const alvoAbs = atualKm + (total - atualKm) / diasRestantes; // re-âncora: espalha o restante
     const fronteira = await escolherFronteira(caminho, atualKm, alvoAbs, cities);
     const novoKm = kmRodoviarioAte(caminho, fronteira.ponto, atualKm);
-    if (novoKm <= atualKm) break; // proteção contra não-avanço
+    if (novoKm <= atualKm) {
+      // A cidade escolhida projeta atrás da posição atual (cidade fora da rota, ou nDias
+      // grande demais p/ a geografia). Em vez de abortar e PERDER dias (cards somem no app),
+      // fecha o dia num ponto "a confirmar" no alvo — mantém a contagem de dias pedida.
+      const pAlvo = amostrarPontoNoAlvo(caminho, alvoAbs);
+      const kmAlvo = kmRodoviarioAte(caminho, pAlvo, atualKm);
+      if (kmAlvo <= atualKm) break; // nem o alvo avança → fim real da rota
+      fronteiras.push({ ponto: pAlvo, cidade: null, nome: 'Local a confirmar', semCidade: true });
+      atualKm = kmAlvo;
+      boundaryKm.push(atualKm);
+      continue;
+    }
     fronteiras.push(fronteira);
     atualKm = novoKm;
     boundaryKm.push(atualKm);
@@ -171,12 +182,17 @@ export async function dividirEmDias(
 
   const dias: DiaExpedicao[] = rawF.legs.map((leg, i) => {
     const isLast = i === rawF.legs.length - 1;
-    const kmDia = round1(leg.distanceMeters / 1000);
+    const pd = paradasPorDia[i] ?? [];
+    // Dia COM parada obrigatória: km da rota base raw0 (que passa pela parada), pelo span
+    // [boundaryKm[i], boundaryKm[i+1]] — inclui o desvio, então o esqueleto bate com o que
+    // o Rolê gera depois. Dia SEM parada: km direto de rawF (inalterado — sem regressão).
+    const kmDia = pd.length > 0
+      ? round1((boundaryKm[i + 1] ?? total) - (boundaryKm[i] ?? 0))
+      : round1(leg.distanceMeters / 1000);
     const origemDia: PontoNomeado = i === 0 ? origem : fronteiraComoPonto(fronteiras[i - 1]);
     const destinoDia: PontoNomeado = isLast ? destino : fronteiraComoPonto(fronteiras[i]);
     const alertas: AlertaDia[] = alertasKmDia(kmDia);
     if (!isLast && fronteiras[i].semCidade) alertas.push('sem_cidade');
-    const pd = paradasPorDia[i] ?? [];
     return {
       dia: i + 1,
       origem: origemDia,
