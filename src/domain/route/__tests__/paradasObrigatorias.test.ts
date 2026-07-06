@@ -90,6 +90,24 @@ describe('dividirEmTrechos — parada obrigatória como fronteira de trecho', ()
     expect(Math.round(r.trechos.reduce((s, t) => s + t.distanciaKm, 0))).toBe(r.totalKm);
     expect(r.trechos[r.trechos.length - 1].destino.nome).toBe('Destino');
   });
+
+  test('parada praticamente na origem/destino não vira fronteira (sem trecho de ~0 km)', async () => {
+    const rota = new FakeRoute(rotaReta(300));
+    const stops = new FakeStops([{ km: 150, rating: 4.6, reviews: 200, placeId: 'P150' }]);
+    const r = await dividirEmTrechos(
+      inputComParadas(300, 100, 200, [
+        { km: 1, nome: 'QuaseOrigem' }, // a 1 km da origem → coincidente, não crava
+        { km: 299, nome: 'QuaseDestino' }, // a 1 km do destino → coincidente, não crava
+      ]),
+      rota,
+      stops
+    );
+    const nomes = r.trechos.map((t) => t.destino.nome);
+    expect(nomes).not.toContain('QuaseOrigem');
+    expect(nomes).not.toContain('QuaseDestino');
+    expect(r.trechos.every((t) => t.distanciaKm >= 2)).toBe(true);
+    expect(r.trechos[r.trechos.length - 1].destino.nome).toBe('Destino');
+  });
 });
 
 describe('calcularRole — passa as paradas obrigatórias para a ida', () => {
