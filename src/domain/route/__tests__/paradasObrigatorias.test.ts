@@ -43,6 +43,22 @@ describe('dividirEmDias — paradas obrigatórias bucketadas por dia', () => {
     expect(r.dias.slice(0, 2).map((d) => d.cidade?.nome)).toEqual(['B', 'D']);
   });
 
+  test('dia com parada FORA da rota inclui o desvio no km (esqueleto = gerado)', async () => {
+    const rota = new FakeRoute(rotaReta(600));
+    const r = await dividirEmDias(
+      inputDiasComParadas(600, 3, [{ km: 300, nome: 'Desvio', offKm: 50 }]),
+      rota,
+      cities()
+    );
+    expect(r.dias).toHaveLength(3);
+    expect(nomesDoDia(r.dias[1])).toEqual(['Desvio']); // parada cai no dia 2
+    // dia 2 = B(200)→Desvio(300, 50 km fora)→D(400): 100 + 100 + 2×50 de desvio = 300
+    expect(r.dias[1].kmDia).toBe(300);
+    expect(r.dias[0].kmDia).toBe(200); // O→B, sem desvio
+    expect(r.dias[2].kmDia).toBe(200); // D→Destino, sem desvio
+    expect(r.totalKm).toBe(700);
+  });
+
   test('parada no último dia é bucketada ao dia N e o destino final é preservado', async () => {
     const rota = new FakeRoute(rotaReta(600));
     const r = await dividirEmDias(inputDiasComParadas(600, 3, [{ km: 500, nome: 'PLast' }]), rota, cities());

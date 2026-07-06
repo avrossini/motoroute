@@ -57,25 +57,34 @@ export class FakeRoute implements RoutePort {
     });
     return bk;
   }
-  private legEntre(aKm: number, bKm: number): RawLeg {
+  private legEntre(aKm: number, bKm: number, distKm = bKm - aKm): RawLeg {
     const steps = this.steps.filter((_, i) => this.cum[i] > aKm + 1e-6 && this.cum[i] <= bKm + 1e-6);
     return {
-      distanceMeters: (bKm - aKm) * 1000,
-      durationSeconds: ((bKm - aKm) / 80) * 3600,
+      distanceMeters: distKm * 1000,
+      durationSeconds: (distKm / 80) * 3600,
       start: pontoNoKm(aKm),
       end: pontoNoKm(bKm),
-      steps: steps.length ? steps : [{ distanceMeters: (bKm - aKm) * 1000, durationSeconds: ((bKm - aKm) / 80) * 3600, end: pontoNoKm(bKm), htmlInstructions: '<b>BR-101</b>' }],
+      steps: steps.length ? steps : [{ distanceMeters: distKm * 1000, durationSeconds: (distKm / 80) * 3600, end: pontoNoKm(bKm), htmlInstructions: '<b>BR-101</b>' }],
     };
   }
   async getRoute(_o: Ponto | string, _d: Ponto | string, wps?: Ponto[]): Promise<RawDirections> {
     if (!wps || wps.length === 0) {
       return { status: 'OK', summary: this.summary, pontos: this.pontos, legs: [this.legEntre(0, this.total())] };
     }
-    const bounds = [0, ...wps.map((w) => this.projetar(w)), this.total()];
+    // Cada waypoint carrega seu km projetado na rota + o desvio lateral (distância do
+    // ponto até a rota). Um waypoint fora da rota adiciona ~2× o desvio (ida e volta),
+    // dividido entre as legs adjacentes — assim o harness modela o detour de uma parada.
+    const marcos = [
+      { km: 0, lat: 0 },
+      ...wps.map((w) => { const km = this.projetar(w); return { km, lat: haversineKm(w, pontoNoKm(km)) }; }),
+      { km: this.total(), lat: 0 },
+    ];
     const legs: RawLeg[] = [];
-    for (let i = 0; i < bounds.length - 1; i++) legs.push(this.legEntre(bounds[i], bounds[i + 1]));
-    // O Google devolve o overview polyline mesmo com waypoints; espelhamos isso
-    // (no harness os waypoints ficam sobre a reta, então a geometria não muda).
+    for (let i = 0; i < marcos.length - 1; i++) {
+      const alongKm = marcos[i + 1].km - marcos[i].km;
+      const detourKm = marcos[i].lat + marcos[i + 1].lat; // sai do ponto i, entra no i+1
+      legs.push(this.legEntre(marcos[i].km, marcos[i + 1].km, alongKm + detourKm));
+    }
     return { status: 'OK', summary: this.summary, pontos: this.pontos, legs };
   }
 }

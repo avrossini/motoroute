@@ -172,41 +172,57 @@ export async function dividirEmDias(
     paradasPorDia[d].push(p);
   }
 
-  // 4. Directions final passando pelas cidades → legs reais por dia
+  // 4. Directions final passando pelas CIDADES e pelas PARADAS obrigatórias, em ordem de
+  //    rota. Cada dia vai da cidade anterior à sua cidade, SOMANDO as paradas intermediárias
+  //    — assim o km do esqueleto já inclui o desvio e bate com o que o Rolê gera depois.
+  const waypointsFinal = [
+    ...fronteiras.map((f, i) => ({ km: boundaryKm[i + 1], ponto: f.ponto, fechaDia: true })),
+    ...paradasKm.map((pk) => ({ km: pk.km, ponto: { lat: pk.p.lat, lng: pk.p.lng }, fechaDia: false })),
+  ].sort((a, b) => a.km - b.km);
+
   const rawF = await rota.getRoute(
     origem,
     destino,
-    fronteiras.map((f) => f.ponto)
+    waypointsFinal.map((w) => w.ponto)
   );
   assertOk(rawF);
 
-  const dias: DiaExpedicao[] = rawF.legs.map((leg, i) => {
-    const isLast = i === rawF.legs.length - 1;
+  // Agrega as legs por dia: a leg k termina em waypointsFinal[k] (a última, no destino).
+  // Fecha o dia ao passar por uma CIDADE (fechaDia) ou na última leg.
+  const perDia: { km: number; min: number }[] = [];
+  let accKm = 0;
+  let accMin = 0;
+  for (let k = 0; k < rawF.legs.length; k++) {
+    accKm += rawF.legs[k].distanceMeters / 1000;
+    accMin += rawF.legs[k].durationSeconds / 60;
+    if (waypointsFinal[k]?.fechaDia || k === rawF.legs.length - 1) {
+      perDia.push({ km: round1(accKm), min: Math.round(accMin) });
+      accKm = 0;
+      accMin = 0;
+    }
+  }
+
+  const dias: DiaExpedicao[] = perDia.map((pdia, i) => {
+    const isLast = i === perDia.length - 1;
     const pd = paradasPorDia[i] ?? [];
-    // Dia COM parada obrigatória: km da rota base raw0 (que passa pela parada), pelo span
-    // [boundaryKm[i], boundaryKm[i+1]] — inclui o desvio, então o esqueleto bate com o que
-    // o Rolê gera depois. Dia SEM parada: km direto de rawF (inalterado — sem regressão).
-    const kmDia = pd.length > 0
-      ? round1((boundaryKm[i + 1] ?? total) - (boundaryKm[i] ?? 0))
-      : round1(leg.distanceMeters / 1000);
     const origemDia: PontoNomeado = i === 0 ? origem : fronteiraComoPonto(fronteiras[i - 1]);
     const destinoDia: PontoNomeado = isLast ? destino : fronteiraComoPonto(fronteiras[i]);
-    const alertas: AlertaDia[] = alertasKmDia(kmDia);
-    if (!isLast && fronteiras[i].semCidade) alertas.push('sem_cidade');
+    const alertas: AlertaDia[] = alertasKmDia(pdia.km);
+    if (!isLast && fronteiras[i]?.semCidade) alertas.push('sem_cidade');
     return {
       dia: i + 1,
       origem: origemDia,
       destino: destinoDia,
       cidade: isLast ? null : fronteiras[i].cidade,
-      kmDia,
-      duracaoMin: Math.round(leg.durationSeconds / 60),
+      kmDia: pdia.km,
+      duracaoMin: pdia.min,
       alertas,
       paradasObrigatorias: pd.length ? pd : undefined,
     };
   });
 
-  const totalKm = dias.reduce((s, d) => s + d.kmDia, 0);
-  const totalMin = dias.reduce((s, d) => s + d.duracaoMin, 0);
+  const totalKm = perDia.reduce((s, d) => s + d.km, 0);
+  const totalMin = perDia.reduce((s, d) => s + d.min, 0);
   return { dias, totalKm: Math.round(totalKm), totalMin };
 }
 
