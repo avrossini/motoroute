@@ -40,6 +40,7 @@ import {
 import type { Database } from "@/types/database";
 import TripMap from "@/components/TripMap";
 import StopAltMap from "@/components/StopAltMap";
+import { Ionicons } from "@expo/vector-icons";
 
 interface LodgingSuggestion {
   id: string;
@@ -2404,7 +2405,7 @@ export default function TripDetailScreen() {
             accessibilityLabel="Ações da viagem"
             hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
           >
-            <Text style={styles.summaryMenuIcon}>⋮</Text>
+            <Ionicons name="ellipsis-vertical" size={20} color="#555" />
           </TouchableOpacity>
           <Text style={styles.summaryRoute}>
             {trip.origin} → {trip.destination}
@@ -2651,7 +2652,7 @@ export default function TripDetailScreen() {
                 aceita — as edições de vocês ficam independentes.
               </Text>
               <TextInput
-                style={styles.wpSearchInput}
+                style={styles.shareInput}
                 value={shareEmail}
                 onChangeText={setShareEmail}
                 placeholder="email@exemplo.com"
@@ -3685,8 +3686,7 @@ const styles = StyleSheet.create({
   rulesLine: { fontSize: 13, color: "#7C4A00" },
 
   // ===== Menu de ações da viagem (⋮ no card de resumo) + action sheet =====
-  summaryMenuBtn: { position: "absolute", top: 8, right: 8, width: 36, height: 36, borderRadius: 18, alignItems: "center", justifyContent: "center" },
-  summaryMenuIcon: { fontSize: 24, fontWeight: "800", color: "#555", lineHeight: 26 },
+  summaryMenuBtn: { position: "absolute", top: 6, right: 6, width: 40, height: 40, borderRadius: 20, alignItems: "center", justifyContent: "center" },
   menuRow: { flexDirection: "row", alignItems: "center", gap: 14, paddingVertical: 14, paddingHorizontal: 4 },
   menuRowPrimary: { backgroundColor: "#FDF3E7", borderRadius: 12, paddingHorizontal: 14, marginBottom: 4 },
   menuRowDisabled: { opacity: 0.4 },
@@ -3773,6 +3773,11 @@ const styles = StyleSheet.create({
 
   // Compartilhar
   shareHint: { fontSize: 13, color: "#888", lineHeight: 19, marginBottom: 14 },
+  shareInput: {
+    height: 50, borderRadius: 12, backgroundColor: "#F7F7F8",
+    paddingHorizontal: 16, fontSize: 15, color: "#1A1A1A",
+    borderWidth: 1, borderColor: "#E4E4E7",
+  },
   shareSendBtn: {
     backgroundColor: "#C97826", borderRadius: 12, paddingVertical: 14,
     alignItems: "center", marginTop: 12,

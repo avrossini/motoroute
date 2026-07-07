@@ -191,7 +191,7 @@ export default function EditarPerfilScreen() {
             label="@usuário"
             value={handle}
             onChangeText={(v) => setHandle(v.toLowerCase().replace(/[^a-z0-9_]/g, ""))}
-            placeholder="andre_rossini"
+            placeholder="seu_usuario"
             hint="3–20 caracteres: letras minúsculas, números ou _. Usado no futuro para te encontrarem."
             autoCapitalize="none"
           />
@@ -280,13 +280,13 @@ const styles = StyleSheet.create({
 
   field: {
     backgroundColor: "#fff", borderRadius: 12, paddingHorizontal: 14,
-    paddingTop: 10, paddingBottom: 6, marginBottom: 8,
+    paddingTop: 12, paddingBottom: 12, marginBottom: 10,
   },
-  fieldLabel: { fontSize: 11, fontWeight: "600", color: "#888", marginBottom: 2 },
-  fieldHint: { fontSize: 11, color: "#aaa", marginBottom: 2, fontStyle: "italic" },
+  fieldLabel: { fontSize: 11, fontWeight: "600", color: "#888", marginBottom: 4 },
+  fieldHint: { fontSize: 11, color: "#aaa", marginBottom: 4, fontStyle: "italic" },
   fieldInput: {
-    fontSize: 15, color: "#1A1A1A", paddingVertical: 4,
-    borderBottomWidth: 1, borderBottomColor: "#F0F0F0",
+    fontSize: 16, color: "#1A1A1A", paddingVertical: 9,
+    borderBottomWidth: 1, borderBottomColor: "#E6E6E6",
   },
 
   saveBtn: {
