@@ -541,6 +541,7 @@ export type Database = {
           origin_lng: number
           origin_name: string
           route_summary: string | null
+          stop_kind: string | null
           trip_id: string | null
           weather_condition: string | null
           weather_rain_pct: number | null
@@ -565,6 +566,7 @@ export type Database = {
           origin_lng: number
           origin_name: string
           route_summary?: string | null
+          stop_kind?: string | null
           trip_id?: string | null
           weather_condition?: string | null
           weather_rain_pct?: number | null
@@ -589,6 +591,7 @@ export type Database = {
           origin_lng?: number
           origin_name?: string
           route_summary?: string | null
+          stop_kind?: string | null
           trip_id?: string | null
           weather_condition?: string | null
           weather_rain_pct?: number | null
