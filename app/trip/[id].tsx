@@ -1314,8 +1314,12 @@ export default function TripDetailScreen() {
           origin_lng: s.originLng ?? null,
           dest_lat: s.destLat ?? null,
           dest_lng: s.destLng ?? null,
-          // Só o segmento do ponto escolhido é manual; sub-trechos automáticos ficam null.
-          stop_kind: s.isChosenPoint ? (wpMode === "fuel" ? "fuel" : "poi") : null,
+          // O ponto escolhido leva o tipo do modo. O ÚLTIMO sub-trecho mantém o destino
+          // original: se aquele destino já era um POI manual, herda 'poi' (senão inserir uma
+          // parada ANTES de um POI rebaixaria o POI a posto automático). Demais: null.
+          stop_kind: s.isChosenPoint
+            ? (wpMode === "fuel" ? "fuel" : "poi")
+            : (isLast && splitSeg.stop_kind === "poi" ? "poi" : null),
         };
       });
 
