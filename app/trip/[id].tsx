@@ -17,7 +17,6 @@ import { Platform } from "react-native";
 import { useState, useCallback, useRef, useEffect } from "react";
 import { useFocusEffect } from "expo-router";
 import { getSupabase } from "@/services/supabase";
-import { openNavigation } from "@/platform/navigation";
 import { calcularRoleRemoto } from "@/services/roleService";
 import { calcularExpedicaoRemota } from "@/services/expedicaoService";
 import type { Trecho } from "@/domain/route/types";
@@ -336,7 +335,6 @@ function SegmentCard({
   departureTime,
   onStopPress,
   onAddPress,
-  onNavigatePress,
   compact = false,
 }: {
   seg: Segment;
@@ -346,7 +344,6 @@ function SegmentCard({
   departureTime: string;
   onStopPress?: () => void;
   onAddPress?: () => void;
-  onNavigatePress?: () => void;
   compact?: boolean; // board de Expedição: clima em 1 linha, sem painel lateral de 76px
 }) {
   const alerts: string[] = (seg.alert_types as string[] | null) ?? [];
@@ -438,11 +435,6 @@ function SegmentCard({
               <Text style={styles.segStopAlt}>⇄</Text>
             </TouchableOpacity>
           ) : null}
-          {onNavigatePress && (
-            <TouchableOpacity style={styles.navigateBtn} onPress={onNavigatePress}>
-              <Text style={styles.navigateBtnText}>Navegar →</Text>
-            </TouchableOpacity>
-          )}
         </View>
         {!compact && <WeatherPanel seg={seg} departureDate={departureDate} />}
       </View>
@@ -650,21 +642,18 @@ export default function TripDetailScreen() {
   const [favoriteIds, setFavoriteIds] = useState<Set<string>>(new Set());
   const [favSaving, setFavSaving] = useState<string | null>(null);
   const [removeWpConfirm, setRemoveWpConfirm] = useState<string | null>(null);
-  const [navApp, setNavApp] = useState<'google_maps' | 'waze' | null>(null);
 
   async function load() {
     const supabase = getSupabase();
-    const [{ data: tripData }, { data: segsData }, { data: prefsData }] = await Promise.all([
+    const [{ data: tripData }, { data: segsData }] = await Promise.all([
       supabase.from("trips").select("*").eq("id", id).single(),
       supabase
         .from("segments")
         .select("*")
         .eq("trip_id", id)
         .order("order_index", { ascending: true }),
-      supabase.from("user_preferences").select("default_navigation_app").maybeSingle(),
     ]);
     setTrip(tripData);
-    setNavApp((prefsData?.default_navigation_app as 'google_maps' | 'waze' | null) ?? null);
     const segs = segsData ?? [];
     setSegments(segs);
 
@@ -767,52 +756,6 @@ export default function TripDetailScreen() {
       if (autoCalc === "true" && tripData) calcularRota(tripData);
     });
   }, [id]));
-
-  function handleNavigate(seg: Segment) {
-    const doNavigate = (app: 'google_maps' | 'waze') => {
-      openNavigation(seg.dest_lat, seg.dest_lng, app);
-    };
-
-    if (navApp) {
-      doNavigate(navApp);
-      return;
-    }
-
-    Alert.alert(
-      "App de navegação",
-      "Qual app você prefere usar para navegar?",
-      [
-        {
-          text: "Google Maps",
-          onPress: async () => {
-            doNavigate('google_maps');
-            await saveNavApp('google_maps');
-            Alert.alert("Dica", "Para alterar o app de navegação, acesse Perfil → Preferências Padrão.");
-          },
-        },
-        {
-          text: "Waze",
-          onPress: async () => {
-            doNavigate('waze');
-            await saveNavApp('waze');
-            Alert.alert("Dica", "Para alterar o app de navegação, acesse Perfil → Preferências Padrão.");
-          },
-        },
-        { text: "Cancelar", style: "cancel" },
-      ]
-    );
-  }
-
-  async function saveNavApp(app: 'google_maps' | 'waze') {
-    setNavApp(app);
-    const supabase = getSupabase();
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return;
-    await supabase
-      .from("user_preferences")
-      .update({ default_navigation_app: app })
-      .eq("user_id", user.id);
-  }
 
   async function toggleFavorite(alt: StopAlternative) {
     const supabase = getSupabase();
@@ -2324,7 +2267,6 @@ export default function TripDetailScreen() {
                     setWpResults([]);
                     setWpMode("fuel");
                   } : undefined}
-                  onNavigatePress={trip.status === "active" ? () => handleNavigate(seg) : undefined}
                 />
                 {isDayTrip && segIdx < daySegs.length - 1 && (
                   <TouchableOpacity
@@ -3564,11 +3506,6 @@ const styles = StyleSheet.create({
   segStopMeta: { fontSize: 10, color: "#888", marginTop: 1 },
   segStopLowRating: { fontSize: 10, color: "#C97826", marginTop: 2, fontWeight: "600" },
   segStopAlt: { fontSize: 18, lineHeight: 20, fontWeight: "700", color: "#2563EB", flexShrink: 0, paddingHorizontal: 2 },
-  navigateBtn: {
-    marginTop: 10, backgroundColor: "#C97826", borderRadius: 10,
-    paddingVertical: 8, alignItems: "center",
-  },
-  navigateBtnText: { color: "#fff", fontSize: 13, fontWeight: "700" },
 
   // Weather panel — right side (D2, D7)
   weatherPanel: {
