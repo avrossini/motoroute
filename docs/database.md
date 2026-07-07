@@ -370,27 +370,84 @@ Notas:
 - Múltiplos comentários permitidos por usuário (sem UNIQUE — ao contrário da avaliação).
 - Usuário pode editar ou apagar os próprios comentários.
 
-## Compartilhamento de roteiro (cópia independente)
+## Compartilhamento de viagem — Fase 1 (cópia independente por convite)
 
-Quando o owner compartilha o roteiro com alguém que **não viajará junto** (compartilhamento de template):
+Compartilhar uma viagem (Rolê ou Expedição) cria uma **cópia independente** (fork) para o destinatário. É o passo 1 de uma futura rede social de viagens de moto e **respeita a decisão dura "usuário único por viagem"** — cada um continua dono de UMA viagem.
 
-- O sistema cria uma **nova viagem** no banco com os mesmos waypoints e estrutura, mas:
-  - `user_id` = usuário destinatário (ele é o owner da cópia)
-  - `status = 'planned'`
-  - `source_trip_id` (campo adicional em `trips`) referencia a viagem original para rastreabilidade
-- Os parâmetros do destinatário (consumo da moto, km/dia, preferências) são aplicados no recálculo dos segmentos
-- A cópia é completamente independente — alterações não afetam a viagem original
-- O sistema exibe notificação para o destinatário: *"Você recebeu este roteiro de [nome]. Pode não ser idêntico ao original — aplicamos seus parâmetros de viagem."*
+**Fluxo:** o owner informa o e-mail do destinatário → cria um **convite `pending`** + notificação. O **fork só acontece no aceite** (o envio não copia nada ainda). Se o e-mail não for de um usuário do MotoRoute, a resposta é idêntica (`{status:'sent'}`) — **não vaza** a existência da conta. A cópia é **FIEL** (não recalcula com parâmetros do destinatário — decisão revista em relação à ideia original): preserva paradas escolhidas (`is_selected`), tipo de parada (`stop_kind`), waypoints e estrutura de dias; zera estado/cache/clima e nasce `status='planned'`. Alterações de um lado não afetam o outro. O **autor original** é preservado em `created_by` (persiste no fork); a proveniência da cópia, em `shared_by`.
 
-Campo adicional em `trips`:
+Todo o cross-user é feito por **RPCs `SECURITY DEFINER`** (1ª vez no projeto) chamadas via `supabase.rpc()` — o RLS user-scoped não permitiria ler/gravar dados de outro usuário. Ver `business-logic.md` § "Compartilhamento (Fase 1)".
+
+Colunas adicionais em `trips`:
 ```sql
-source_trip_id      uuid REFERENCES trips(id) ON DELETE SET NULL   -- null se viagem original
-rating              integer CHECK (rating BETWEEN 1 AND 5)           -- avaliação geral da viagem (1-5), preenchida pelo usuário ao concluir
-rating_note         text                                             -- texto livre opcional junto à avaliação (ex: "Ótima! Estrada excelente.")
-total_distance_km   numeric(7,1)                                     -- cache: SUM(segments.distance_km) — atualizado ao salvar/concluir o roteiro
-total_duration_min  integer                                          -- cache: SUM(segments.duration_minutes) — atualizado ao salvar/concluir o roteiro
-stop_count          integer DEFAULT 0                                -- cache: número de paradas selecionadas — atualizado ao alterar o roteiro
+source_trip_id      uuid REFERENCES trips(id) ON DELETE SET NULL   -- viagem de origem do fork (null se original)
+created_by          uuid REFERENCES auth.users(id) ON DELETE SET NULL  -- AUTOR ORIGINAL; copiado no fork (preserva autoria). Backfill = user_id
+shared_by           uuid REFERENCES auth.users(id) ON DELETE SET NULL  -- quem compartilhou ESTA cópia (null se original)
+shared_at           timestamptz                                     -- quando esta cópia foi gerada por um aceite
+visibility          text NOT NULL DEFAULT 'private'                  -- CHECK (private|unlisted|public) — antecipa link/feed (Fase 2)
+rating              integer CHECK (rating BETWEEN 1 AND 5)           -- avaliação geral da viagem (1-5), ao concluir
+rating_note         text                                             -- texto livre opcional junto à avaliação
+total_distance_km   numeric(7,1)                                     -- cache: SUM(segments.distance_km)
+total_duration_min  integer                                          -- cache: SUM(segments.duration_minutes)
+stop_count          integer DEFAULT 0                                -- cache: número de paradas selecionadas
 ```
+
+### `profiles` — perfil público mínimo (fundação social)
+```sql
+id            uuid PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE
+display_name  text                                    -- nome exibido a outros pilotos
+handle        text UNIQUE                             -- @usuário (nullable); CHECK ^[a-z0-9_]{3,20}$ ; UNIQUE em lower(handle)
+avatar_url    text                                    -- URL pública no bucket 'avatars' (com ?v=timestamp p/ cache-bust)
+bio           text
+created_at    timestamptz DEFAULT now()
+updated_at    timestamptz DEFAULT now()
+```
+- **E-mail NÃO fica aqui** — é o que permite abrir o SELECT sem vazar PII.
+- **Exceção RLS proposital ao padrão own-only:** `profiles` é legível por **qualquer autenticado** (`FOR SELECT TO authenticated USING (true)`) — é o que torna "Criada por {nome}" e perfis públicos possíveis. Escrita/atualização só do próprio (`auth.uid() = id`). `REVOKE ALL FROM anon`.
+- Trigger `create_user_profile()` (`AFTER INSERT ON auth.users`, SECURITY DEFINER) cria o profile no signup (`display_name = COALESCE(raw_user_meta_data->>'full_name','name', split_part(email,'@',1))`). Migration faz backfill retroativo + `UPDATE trips SET created_by = user_id WHERE created_by IS NULL`.
+
+### `notifications` — genérica (convites + avisos)
+```sql
+id            uuid PRIMARY KEY DEFAULT gen_random_uuid()
+recipient_id  uuid NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE
+actor_id      uuid REFERENCES auth.users(id) ON DELETE SET NULL
+type          text NOT NULL                           -- 'trip_shared' | 'share_accepted' | ...
+entity_type   text                                    -- 'trip_share' | 'trip'
+entity_id     uuid                                    -- trip_shares.id (convite) ou trips.id (cópia)
+data          jsonb NOT NULL DEFAULT '{}'             -- SNAPSHOT: trip_title, trip_route, actor_name — blinda contra edição/exclusão da viagem
+read_at       timestamptz
+created_at    timestamptz DEFAULT now()
+```
+- Index parcial `(recipient_id, created_at DESC) WHERE read_at IS NULL` (badge de não-lidas).
+- RLS: destinatário faz SELECT/UPDATE das próprias (marcar lida). `REVOKE INSERT, DELETE FROM authenticated` — **só as RPCs inserem**. `REVOKE ALL FROM anon`.
+
+### `trip_shares` — o convite (pending → accepted/declined)
+```sql
+id              uuid PRIMARY KEY DEFAULT gen_random_uuid()
+trip_id         uuid NOT NULL REFERENCES trips(id) ON DELETE CASCADE
+sender_id       uuid NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE
+recipient_id    uuid REFERENCES auth.users(id) ON DELETE CASCADE   -- nullable (antecipa convite por link, Fase 2)
+recipient_email text
+status          text NOT NULL DEFAULT 'pending'                    -- CHECK (pending|accepted|declined)
+copied_trip_id  uuid REFERENCES trips(id) ON DELETE SET NULL       -- a cópia gerada no aceite
+created_at      timestamptz DEFAULT now()
+responded_at    timestamptz
+```
+- `CREATE UNIQUE INDEX ... ON (trip_id, recipient_id) WHERE status='pending'` — anti-duplicata de convite pendente.
+- RLS: SELECT para sender OU recipient. `REVOKE INSERT, UPDATE, DELETE FROM authenticated` — só as RPCs escrevem.
+
+### RPCs `SECURITY DEFINER` (schema `public`, `SET search_path = public, pg_temp`)
+
+| Função | Assinatura | O que faz |
+|--------|-----------|-----------|
+| `share_trip` | `(p_trip_id uuid, p_recipient_email text) → jsonb` | Valida `auth.uid()=trip.user_id`; resolve e-mail→user; se não achar retorna `{status:'sent'}` (não vaza); bloqueia self-share; upsert `trip_shares` pending (idempotente) + notification `trip_shared` com snapshot. `GRANT EXECUTE TO authenticated`. |
+| `respond_to_share` | `(p_share_id uuid, p_accept boolean) → jsonb` | `SELECT ... FOR UPDATE` + `status='pending'` (à prova de duplo-clique → senão `already_responded`); no aceite valida que a origem existe (senão declina + `source_deleted`), chama `fork_trip`, marca `accepted`+`copied_trip_id`, notifica o remetente (`share_accepted`); sempre marca o convite como lido. `GRANT EXECUTE TO authenticated`. |
+| `fork_trip` | `(p_source_trip_id uuid, p_new_owner uuid, p_shared_by uuid) → uuid` | **Interna** (`REVOKE ALL FROM public`; só `respond_to_share` chama). Clona `trips → trip_days → waypoints → segments` (mapa old→new via temp table `_seg_map`) `→ stop_suggestions` (remapeia `segment_id`) `→ lodging_suggestions`. Usa `jsonb_populate_record` (robusto a novas colunas). NÃO copia check-ins/avaliações/comentários. |
+
+> **Gotcha de deploy:** as RPCs são as primeiras do projeto — o PostgREST devolve **404** em `/rest/v1/rpc/*` até recarregar o schema. Local: `docker compose restart rest`. Prod (Supabase Cloud): `NOTIFY pgrst, 'reload schema';`.
+
+### Bucket de Storage `avatars` (público)
+`INSERT INTO storage.buckets (id,name,public) VALUES ('avatars','avatars',true)`. Policies em `storage.objects`: leitura livre (`bucket_id='avatars'`); escrita/atualização/remoção só na pasta do próprio usuário (`(storage.foldername(name))[1] = auth.uid()::text`). Convenção de path: `avatars/<uid>/avatar.jpg`.
 
 ---
 
