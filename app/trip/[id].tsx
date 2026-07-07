@@ -382,8 +382,40 @@ function SegmentCard({
             )}
           </View>
           {compact && <WeatherLine seg={seg} departureDate={departureDate} />}
-          {stop && (
-            <TouchableOpacity style={styles.segStopCard} onPress={onStopPress} activeOpacity={0.7} accessibilityRole="button" accessibilityLabel="Ver alternativas de posto">
+          {seg.stop_kind === "poi" ? (
+            // POI: card dividido — esquerda o ponto de interesse, direita o posto vizinho
+            // (anexado pelo fetchStops com a mesma regra de avaliação).
+            <View style={{ flexDirection: "row", gap: 8 }}>
+              <View style={[styles.segStopCard, { flex: 1 }]}>
+                <Text style={styles.segStopIcon}>📍</Text>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.segStopName} numberOfLines={1}>{seg.destination_name}</Text>
+                  <Text style={styles.segStopMeta}>Ponto de interesse</Text>
+                </View>
+              </View>
+              {stop && (
+                <View style={[styles.segStopCard, { flex: 1 }]}>
+                  <Text style={styles.segStopIcon}>⛽</Text>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.segStopName} numberOfLines={1}>{stop.name}</Text>
+                    <Text style={styles.segStopMeta}>
+                      {stop.rating != null ? `★${stop.rating}` : "Sem avaliação"}
+                      {stop.is_24h ? "  24h" : ""}
+                    </Text>
+                  </View>
+                </View>
+              )}
+            </View>
+          ) : stop ? (
+            // Posto: 'fuel' = escolhido/fixado (não abre alternativas); null = automático (⇄).
+            <TouchableOpacity
+              style={styles.segStopCard}
+              onPress={seg.stop_kind === "fuel" ? undefined : onStopPress}
+              activeOpacity={seg.stop_kind === "fuel" ? 1 : 0.7}
+              disabled={seg.stop_kind === "fuel"}
+              accessibilityRole="button"
+              accessibilityLabel="Ver alternativas de posto"
+            >
               <Text style={styles.segStopIcon}>⛽</Text>
               <View style={{ flex: 1 }}>
                 <Text style={styles.segStopName} numberOfLines={1}>{stop.name}</Text>
@@ -396,9 +428,9 @@ function SegmentCard({
                   <Text style={styles.segStopLowRating}>⚠ Avaliação baixa — confirme antes de ir</Text>
                 )}
               </View>
-              <Text style={styles.segStopAlt}>⇄</Text>
+              {seg.stop_kind !== "fuel" && <Text style={styles.segStopAlt}>⇄</Text>}
             </TouchableOpacity>
-          )}
+          ) : null}
           {onNavigatePress && (
             <TouchableOpacity style={styles.navigateBtn} onPress={onNavigatePress}>
               <Text style={styles.navigateBtnText}>Navegar →</Text>
