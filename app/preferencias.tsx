@@ -10,6 +10,8 @@ import {
   Switch,
 } from "react-native";
 import { router } from "expo-router";
+import { MaterialCommunityIcons } from "@expo/vector-icons";
+import { NAV_APPS } from "@/platform/nav-apps";
 import { getSupabase } from "@/services/supabase";
 
 interface Prefs {
@@ -214,17 +216,25 @@ export default function PreferenciasScreen() {
           <View style={styles.field}>
             <Text style={styles.fieldLabel}>App de navegação padrão</Text>
             <View style={{ flexDirection: "row", gap: 8 }}>
-              {(["google_maps", "waze"] as const).map((app) => (
-                <TouchableOpacity
-                  key={app}
-                  onPress={() => setPrefs((p) => ({ ...p, default_navigation_app: app }))}
-                  style={[styles.navOption, prefs.default_navigation_app === app && styles.navOptionSelected]}
-                >
-                  <Text style={[styles.navOptionText, prefs.default_navigation_app === app && styles.navOptionTextSelected]}>
-                    {app === "google_maps" ? "Google Maps" : "Waze"}
-                  </Text>
-                </TouchableOpacity>
-              ))}
+              {(["google_maps", "waze"] as const).map((app) => {
+                const selected = prefs.default_navigation_app === app;
+                return (
+                  <TouchableOpacity
+                    key={app}
+                    onPress={() => setPrefs((p) => ({ ...p, default_navigation_app: app }))}
+                    style={[styles.navOption, selected && styles.navOptionSelected]}
+                  >
+                    <MaterialCommunityIcons
+                      name={NAV_APPS[app].icon}
+                      size={18}
+                      color={selected ? "#fff" : app === "waze" ? "#05C8F7" : "#4285F4"}
+                    />
+                    <Text style={[styles.navOptionText, selected && styles.navOptionTextSelected]}>
+                      {NAV_APPS[app].label}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
             </View>
           </View>
         </View>
@@ -273,6 +283,7 @@ const styles = StyleSheet.create({
   },
   saveBtnText: { color: "#fff", fontSize: 16, fontWeight: "700" },
   navOption: {
+    flexDirection: "row", alignItems: "center", gap: 6,
     paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20,
     backgroundColor: "#F0F0F0", borderWidth: 1, borderColor: "#E0E0E0",
   },
