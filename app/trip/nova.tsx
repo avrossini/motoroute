@@ -171,6 +171,7 @@ export default function NovaTripScreen() {
       .from("trips")
       .insert({
         user_id: user.id,
+        created_by: user.id, // autor original — persiste em cópias compartilhadas
         title: title.trim(),
         origin: originGeo.name,
         destination: destGeo.name,
