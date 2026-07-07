@@ -138,7 +138,7 @@ export default function ActiveTripScreen() {
     const restsBefore = cur
       ? restDays.filter((rd) => (rd.day_index ?? 0) < (cur.day_index ?? 1)).length
       : 0;
-    const STEP = 54; // largura da coluna do timeline
+    const STEP = 74; // largura da coluna do timeline
     stopsScrollRef.current?.scrollTo({ x: Math.max(0, (currentIndex + restsBefore) * STEP - 120), animated: true });
   }, [loading, currentIndex, segments, restDays]);
 
@@ -613,14 +613,14 @@ const styles = StyleSheet.create({
   stopItem: { alignItems: "center", width: 64 },
 
   // Timeline em ziguezague (paradas alternando acima/abaixo da linha central)
-  timelineRow: { flexGrow: 1, flexDirection: "row", justifyContent: "center", alignItems: "center", paddingHorizontal: 24, paddingTop: 2 },
-  tlCol: { width: 54, height: 112, alignItems: "center", position: "relative" },
+  timelineRow: { flexGrow: 1, flexDirection: "row", justifyContent: "center", alignItems: "center", paddingHorizontal: 40, paddingTop: 2 },
+  tlCol: { width: 74, height: 112, alignItems: "center", position: "relative" },
   tlLine: { position: "absolute", top: 54, left: 0, right: 0, height: 3, backgroundColor: "#2A2A2A" },
   tlLineOn: { backgroundColor: "#C97826" },
-  tlHalfTop: { position: "absolute", top: 0, height: 55, width: 54, alignItems: "center", justifyContent: "flex-end" },
-  tlHalfBottom: { position: "absolute", top: 55, height: 55, width: 54, alignItems: "center", justifyContent: "flex-start" },
+  tlHalfTop: { position: "absolute", top: 0, height: 55, width: 74, alignItems: "center", justifyContent: "flex-end" },
+  tlHalfBottom: { position: "absolute", top: 55, height: 55, width: 74, alignItems: "center", justifyContent: "flex-start" },
   tlDot: { marginVertical: 3, zIndex: 1 },
-  tlName: { fontSize: 10, color: "#8A8A8A", textAlign: "center", lineHeight: 13, width: 96 },
+  tlName: { fontSize: 10, color: "#8A8A8A", textAlign: "center", lineHeight: 13, width: 144 },
   tlNameCurrent: { color: "#C97826", fontWeight: "700" },
   stopDot: {
     width: 22,
