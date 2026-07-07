@@ -176,6 +176,8 @@ O algoritmo de geração de roteiro usa duas estratégias conforme o número de 
 
 Todo trecho intermediário do roteiro (exceto o último, que termina no destino final ou na hospedagem) **deve terminar em um posto de combustível**. Não existe parada sem local de parada — o usuário não para no meio da estrada.
 
+> **Exceção — POI manual (Rolê).** Na **inserção manual** de parada, o viajante escolhe entre **⛽ Posto** (segue esta regra: a parada é um posto) e **📍 Ponto de interesse** (um POI: mirante, bar, monumento). No modo POI a parada intermediária **não** é um posto — o destino do trecho é o próprio POI, e o app **anexa** o posto mais próximo (mesma regra de avaliação abaixo) como sugestão ao lado, sem deslocar o ponto. A geração **automática** do motor nunca muda: toda parada intermediária automática continua sendo um posto. Ver **Inserção manual de paradas no roteiro** e `database.md → segments.stop_kind`.
+
 ### Lógica de seleção em três níveis
 
 A busca é feita via Google Places API (`type=gas_station`) e percorre os níveis abaixo até encontrar um resultado:
@@ -450,8 +452,10 @@ Referência para implementação — sem obrigação de mudança imediata no ban
 
 Toda inserção de parada percorre as mesmas fases antes de qualquer persistência.
 
-#### Fase 1 — Geocodificação
-- Converter o ponto inserido para lat/lng via Google Geocoding API
+> **Escolha do tipo (só inserção manual, Rolê).** Antes de buscar, o viajante escolhe o modo: **⛽ Posto** (padrão) busca apenas postos (`type=gas_station`) e fixa o posto exato escolhido; **📍 Ponto de interesse** busca lugares que **não** são postos, mantém o ponto exato e anexa o posto vizinho. O modo define `segments.stop_kind` (`fuel`/`poi`) do trecho criado.
+
+#### Fase 1 — Busca do ponto
+- Busca via Google **Places Text Search** (`/api/places-search`), filtrada pelo modo (⛽ posto / 📍 POI). Retorna `place_id`, `types` e avaliação — o `place_id` fixa a escolha exata do viajante.
 
 #### Fase 2 — Preview dos novos trechos
 - Directions API calcula `A → P` e `P → B` (2 chamadas em paralelo), onde A→B é o trecho clicado
@@ -467,13 +471,14 @@ Toda inserção de parada percorre as mesmas fases antes de qualquer persistênc
 - O trecho clicado é removido e substituído pelos N novos trechos (split cirúrgico)
 - `order_index` dos demais trechos é ajustado para abrir espaço
 - Caches da viagem atualizados: `total_distance_km`, `total_duration_min`, `stop_count`
-- Postos de combustível buscados automaticamente para todos os novos trechos intermediários
+- Postos de combustível buscados automaticamente para os novos trechos intermediários **automáticos** e para paradas manuais em modo **⛽ Posto** (o posto exato escolhido é fixado, não re-buscado). Uma parada manual **📍 POI** guarda o POI como destino (`segments.stop_kind='poi'`) e recebe apenas o posto vizinho como sugestão ao lado. Ver `database.md → segments.stop_kind`.
 - Previsão do tempo buscada automaticamente para todos os novos trechos (se dentro da janela de 7 dias)
 
 ### Regras gerais
 - **Nunca persistir** a parada sem passar pela Fase 3 (confirmação)
 - **Nunca estimar** distâncias — sempre Directions API
 - Preservar paradas obrigatórias definidas pelo usuário em qualquer tipo de recálculo
+- Uma parada manual **⛽ Posto** (`stop_kind='fuel'`) fixa o posto exato: a busca automática de postos (`fetchStops`) nunca a substitui. Uma parada **📍 POI** (`stop_kind='poi'`) mantém o POI como destino, e o cabeçalho do trecho usa o nome do POI; no modo ⛽ o cabeçalho usa o nome do posto escolhido (exceção consciente à regra "cabeçalho = cidade" da geração automática — `route-engine.md §3.8`). O recálculo do Rolê regenera do zero e descarta paradas manuais (comportamento intencional já avisado ao usuário)
 - Durante viagem ativa (`trips.status = 'active'`): o fluxo é idêntico; o banner de aviso de viagem ativa (ver seção "Edições durante viagem ativa") é exibido antes de abrir o campo de busca
 
 ## Alternativas de parada

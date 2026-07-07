@@ -67,6 +67,7 @@ weather_wind_kmh    integer                          -- velocidade do vento em k
 has_alert           boolean DEFAULT false
 alert_types         text[]                           -- ['rain','night','mountain']
 weather_updated_at  timestamptz                          -- quando o clima foi consultado pela última vez
+stop_kind           text CHECK (stop_kind IN ('fuel','poi'))  -- inserção MANUAL: 'fuel'=posto exato fixado; 'poi'=POI (destino é o próprio ponto). NULL=parada automática do motor. fetchStops/attachRolePostos pulam 'fuel'.
 ```
 
 ### `stop_suggestions` — postos/restaurantes sugeridos por trecho
@@ -82,6 +83,8 @@ latitude        numeric(10,7) NOT NULL
 longitude       numeric(10,7) NOT NULL
 is_selected     boolean DEFAULT false                -- qual foi escolhido
 ```
+
+> Numa parada manual **📍 POI** (`segments.stop_kind='poi'`), o `stop_suggestion` selecionado é o **posto vizinho** anexado automaticamente (mesma regra de avaliação), exibido ao lado do POI. Numa parada **⛽ Posto** manual (`stop_kind='fuel'`), é o **posto exato** escolhido pelo viajante (pinado; `fetchStops` não substitui).
 
 ### `checkins` — registro de chegada (ou pulo) em cada parada durante a viagem
 ```sql

@@ -91,6 +91,8 @@ deixa de ser necessária.
 
 Origem e destino ficam intocados; apenas as paradas **intermediárias** são postos.
 
+> **Escopo desta invariante.** "Toda parada intermediária é um posto" vale para a geração **automática** (este motor) e para a inserção manual em modo **⛽ Posto**. A inserção manual em modo **📍 Ponto de interesse** é uma exceção **fora** do motor: o destino do trecho é o próprio POI (`segments.stop_kind='poi'`), com o posto vizinho apenas anexado como sugestão. O motor nunca re-snapa uma parada manual fixada — `fetchStops`/`attachRolePostos` pulam `stop_kind='fuel'`. Ver `business-logic.md → Inserção manual de paradas`.
+
 ### 3.2 Princípio central — buscar-primeiro
 
 Em vez de **cortar** teórico e **torcer** para haver posto, o primitivo **decide onde
