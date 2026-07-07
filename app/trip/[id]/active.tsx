@@ -7,9 +7,10 @@ import {
   ActivityIndicator,
   Modal,
   Pressable,
+  ScrollView,
 } from "react-native";
 import { useLocalSearchParams, router } from "expo-router";
-import { useCallback, useState } from "react";
+import { useCallback, useState, useRef, useEffect } from "react";
 import { useFocusEffect } from "expo-router";
 import { getSupabase } from "@/services/supabase";
 import { openNavigation } from "@/platform/navigation";
@@ -66,6 +67,7 @@ export default function ActiveTripScreen() {
   // Posto associado a cada segmento (para o botão "Ir ao posto" quando a parada é um POI).
   const [stopById, setStopById] = useState<Map<string, { name: string; lat: number; lng: number }>>(new Map());
   const [navApp, setNavApp] = useState<NavApp | null>(null); // app de navegação preferido (Preferências)
+  const stopsScrollRef = useRef<ScrollView>(null); // trilha de progresso (scroll horizontal)
 
   async function load() {
     const supabase = getSupabase();
@@ -128,6 +130,17 @@ export default function ActiveTripScreen() {
 
   const doneCount = checkins.filter((c) => !c.skipped).length;
   const progressPct = segments.length > 0 ? doneCount / segments.length : 0;
+
+  // Auto-rola a trilha até a parada atual (mantém o ponto laranja visível com muitas paradas)
+  useEffect(() => {
+    if (loading || currentIndex < 0) return;
+    const cur = segments[currentIndex];
+    const restsBefore = cur
+      ? restDays.filter((rd) => (rd.day_index ?? 0) < (cur.day_index ?? 1)).length
+      : 0;
+    const STEP = 70; // largura do item (64) + gap (6)
+    stopsScrollRef.current?.scrollTo({ x: Math.max(0, (currentIndex + restsBefore) * STEP - 110), animated: true });
+  }, [loading, currentIndex, segments, restDays]);
 
   function openCheckinModal() {
     setCheckinKm("");
@@ -334,7 +347,12 @@ export default function ActiveTripScreen() {
                   ]}
                 />
               </View>
-              <View style={styles.stopsRow}>
+              <ScrollView
+                ref={stopsScrollRef}
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.stopsRow}
+              >
                 {(() => {
                   // Intercala os dias parados (sem segmento) na trilha, na posição de
                   // calendário certa: um rest day de day_index R aparece antes do primeiro
@@ -350,7 +368,7 @@ export default function ActiveTripScreen() {
                           <View style={[styles.stopDot, styles.stopDotRest]}>
                             <Text style={styles.stopRestIcon}>🛌</Text>
                           </View>
-                          <Text style={styles.stopName} numberOfLines={1}>
+                          <Text style={styles.stopName} numberOfLines={2}>
                             {city}
                           </Text>
                         </View>
@@ -384,7 +402,7 @@ export default function ActiveTripScreen() {
                             styles.stopName,
                             isCurrent && styles.stopNameCurrent,
                           ]}
-                          numberOfLines={1}
+                          numberOfLines={2}
                         >
                           {shortName}
                         </Text>
@@ -394,7 +412,7 @@ export default function ActiveTripScreen() {
                   pushRestsBefore(Number.MAX_SAFE_INTEGER); // dias parados no fim
                   return nodes;
                 })()}
-              </View>
+              </ScrollView>
             </View>
 
             {/* Action buttons */}
@@ -601,8 +619,9 @@ const styles = StyleSheet.create({
     backgroundColor: "#C97826",
     borderRadius: 3,
   },
-  stopsRow: { flexDirection: "row", justifyContent: "space-around" },
-  stopItem: { alignItems: "center", flex: 1 },
+  // Scroll horizontal: centraliza quando cabe, rola quando há muitas paradas (nada de espremer)
+  stopsRow: { flexGrow: 1, flexDirection: "row", justifyContent: "center", alignItems: "flex-start", gap: 6, paddingHorizontal: 4 },
+  stopItem: { alignItems: "center", width: 64 },
   stopDot: {
     width: 22,
     height: 22,
@@ -619,7 +638,7 @@ const styles = StyleSheet.create({
   stopDotRest: { backgroundColor: "#2A2620", borderColor: "#C97826", borderStyle: "dashed" },
   stopRestIcon: { fontSize: 11 },
   stopCheck: { fontSize: 10, color: "#fff", fontWeight: "800" },
-  stopName: { fontSize: 9, color: "#555", textAlign: "center" },
+  stopName: { fontSize: 10, color: "#8A8A8A", textAlign: "center", lineHeight: 13, width: 60 },
   stopNameCurrent: { color: "#C97826", fontWeight: "700" },
 
   navBtn: {
