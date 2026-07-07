@@ -5,8 +5,6 @@ import {
   TouchableOpacity,
   StyleSheet,
   ActivityIndicator,
-  Linking,
-  Platform,
   Modal,
   Pressable,
 } from "react-native";
@@ -14,6 +12,9 @@ import { useLocalSearchParams, router } from "expo-router";
 import { useCallback, useState } from "react";
 import { useFocusEffect } from "expo-router";
 import { getSupabase } from "@/services/supabase";
+import { openNavigation } from "@/platform/navigation";
+import { NAV_APPS, type NavApp } from "@/platform/nav-apps";
+import { MaterialCommunityIcons } from "@expo/vector-icons";
 import type { Database } from "@/types/database";
 
 type Trip = Database["public"]["Tables"]["trips"]["Row"];
@@ -44,16 +45,6 @@ function fmtDuration(min: number) {
   return m === 0 ? `${h}h` : `${h}h${String(m).padStart(2, "0")}`;
 }
 
-function openNavigation(lat: number, lng: number, destName: string) {
-  const url = `https://maps.google.com/?daddr=${lat},${lng}`;
-  if (Platform.OS === "web") {
-    // @ts-ignore
-    window.open(url, "_blank");
-  } else {
-    Linking.openURL(url);
-  }
-}
-
 function weatherIcon(rainPct: number | null) {
   if ((rainPct ?? 0) >= 60) return "🌧";
   if ((rainPct ?? 0) >= 30) return "⛅";
@@ -74,6 +65,7 @@ export default function ActiveTripScreen() {
   const [checkinFueled, setCheckinFueled] = useState(false);
   // Posto associado a cada segmento (para o botão "Ir ao posto" quando a parada é um POI).
   const [stopById, setStopById] = useState<Map<string, { name: string; lat: number; lng: number }>>(new Map());
+  const [navApp, setNavApp] = useState<NavApp | null>(null); // app de navegação preferido (Preferências)
 
   async function load() {
     const supabase = getSupabase();
@@ -82,7 +74,7 @@ export default function ActiveTripScreen() {
     } = await supabase.auth.getUser();
     setUserId(user?.id ?? null);
 
-    const [{ data: tripData }, { data: segsData }, { data: checkinsData }, { data: restDaysData }] =
+    const [{ data: tripData }, { data: segsData }, { data: checkinsData }, { data: restDaysData }, { data: prefsData }] =
       await Promise.all([
         supabase.from("trips").select("*").eq("id", id).single(),
         supabase
@@ -99,12 +91,15 @@ export default function ActiveTripScreen() {
           .eq("trip_id", id)
           .eq("is_rest_day", true)
           .order("day_index", { ascending: true }),
+        // App de navegação preferido — usado nos botões "Navegar" (deep link + ícone)
+        supabase.from("user_preferences").select("default_navigation_app").maybeSingle(),
       ]);
 
     setTrip(tripData);
     setSegments(segsData ?? []);
     setCheckins(checkinsData ?? []);
     setRestDays(restDaysData ?? []);
+    setNavApp((prefsData?.default_navigation_app as NavApp | null) ?? null);
 
     // Posto selecionado de cada segmento (o POI usa isso no botão "Ir ao posto").
     const segsForStops = segsData ?? [];
@@ -406,17 +401,15 @@ export default function ActiveTripScreen() {
             <TouchableOpacity
               style={styles.navBtn}
               onPress={() =>
-                openNavigation(
-                  currentSeg.dest_lat,
-                  currentSeg.dest_lng,
-                  currentSeg.destination_name
-                )
+                openNavigation(currentSeg.dest_lat, currentSeg.dest_lng, navApp ?? "google_maps")
               }
             >
-              <Text style={styles.navBtnText}>
-                🧭 Navegar para{" "}
-                {currentSeg.destination_name.split(",")[0]}
-              </Text>
+              <View style={styles.navBtnInner}>
+                <MaterialCommunityIcons name={NAV_APPS[navApp ?? "google_maps"].icon} size={22} color="#fff" />
+                <Text style={styles.navBtnText}>
+                  Navegar para {currentSeg.destination_name.split(",")[0]}
+                </Text>
+              </View>
             </TouchableOpacity>
 
             {/* Parada é um POI: oferecer também navegar ao posto vizinho associado. */}
@@ -425,7 +418,7 @@ export default function ActiveTripScreen() {
                 style={{ borderWidth: 1.5, borderColor: "#C97826", borderRadius: 12, paddingVertical: 12, alignItems: "center", marginTop: 8 }}
                 onPress={() => {
                   const p = stopById.get(currentSeg.id)!;
-                  openNavigation(p.lat, p.lng, p.name);
+                  openNavigation(p.lat, p.lng, navApp ?? "google_maps");
                 }}
               >
                 <Text style={{ color: "#C97826", fontSize: 15, fontWeight: "700" }}>
@@ -637,6 +630,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     minHeight: 64,
   },
+  navBtnInner: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 10 },
   navBtnText: { color: "#fff", fontSize: 18, fontWeight: "800" },
 
   checkinBtn: {
