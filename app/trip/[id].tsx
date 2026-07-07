@@ -383,8 +383,8 @@ function SegmentCard({
           </View>
           {compact && <WeatherLine seg={seg} departureDate={departureDate} />}
           {seg.stop_kind === "poi" ? (
-            // POI: card dividido — esquerda o ponto de interesse, direita o posto vizinho
-            // (anexado pelo fetchStops com a mesma regra de avaliação).
+            // POI: card dividido — esquerda o ponto de interesse (sem ⇄), direita o posto
+            // vizinho (com ⇄ p/ trocar de posto, igual aos demais).
             <View style={{ flexDirection: "row", gap: 8 }}>
               <View style={[styles.segStopCard, { flex: 1 }]}>
                 <Text style={styles.segStopIcon}>📍</Text>
@@ -394,7 +394,13 @@ function SegmentCard({
                 </View>
               </View>
               {stop && (
-                <View style={[styles.segStopCard, { flex: 1 }]}>
+                <TouchableOpacity
+                  style={[styles.segStopCard, { flex: 1 }]}
+                  onPress={onStopPress}
+                  activeOpacity={0.7}
+                  accessibilityRole="button"
+                  accessibilityLabel="Trocar posto"
+                >
                   <Text style={styles.segStopIcon}>⛽</Text>
                   <View style={{ flex: 1 }}>
                     <Text style={styles.segStopName} numberOfLines={1}>{stop.name}</Text>
@@ -403,18 +409,18 @@ function SegmentCard({
                       {stop.is_24h ? "  24h" : ""}
                     </Text>
                   </View>
-                </View>
+                  <Text style={styles.segStopAlt}>⇄</Text>
+                </TouchableOpacity>
               )}
             </View>
           ) : stop ? (
-            // Posto: 'fuel' = escolhido/fixado (não abre alternativas); null = automático (⇄).
+            // Posto (manual 'fuel' ou automático null): ⇄ p/ trocar de posto em ambos.
             <TouchableOpacity
               style={styles.segStopCard}
-              onPress={seg.stop_kind === "fuel" ? undefined : onStopPress}
-              activeOpacity={seg.stop_kind === "fuel" ? 1 : 0.7}
-              disabled={seg.stop_kind === "fuel"}
+              onPress={onStopPress}
+              activeOpacity={0.7}
               accessibilityRole="button"
-              accessibilityLabel="Ver alternativas de posto"
+              accessibilityLabel="Trocar posto"
             >
               <Text style={styles.segStopIcon}>⛽</Text>
               <View style={{ flex: 1 }}>
@@ -428,7 +434,7 @@ function SegmentCard({
                   <Text style={styles.segStopLowRating}>⚠ Avaliação baixa — confirme antes de ir</Text>
                 )}
               </View>
-              {seg.stop_kind !== "fuel" && <Text style={styles.segStopAlt}>⇄</Text>}
+              <Text style={styles.segStopAlt}>⇄</Text>
             </TouchableOpacity>
           ) : null}
           {onNavigatePress && (
@@ -1067,11 +1073,13 @@ export default function TripDetailScreen() {
       const alt = stopModal?.alternatives.find((a) => a.place_id === placeId);
       const { data: seg } = await supabase
         .from("segments")
-        .select("origin_lat,origin_lng,dest_lat,dest_lng,order_index,day_index,trip_id")
+        .select("origin_lat,origin_lng,dest_lat,dest_lng,order_index,day_index,trip_id,stop_kind")
         .eq("id", segId)
         .single();
 
-      if (alt && seg) {
+      // Num POI o posto é só a sugestão vizinha: trocar apenas re-seleciona (não move o POI).
+      // Nos demais (manual 'fuel' e automático) o posto É o destino → reposiciona o trecho.
+      if (alt && seg && seg.stop_kind !== "poi") {
         // 3. Recalculate current segment: origin → new stop
         const [r1] = await Promise.all([
           fetch(`/api/directions-simple?origin_lat=${seg.origin_lat}&origin_lng=${seg.origin_lng}&dest_lat=${alt.latitude}&dest_lng=${alt.longitude}`).then((r) => r.json()),
@@ -1079,7 +1087,7 @@ export default function TripDetailScreen() {
         if (r1.distance_km != null) {
           await supabase
             .from("segments")
-            .update({ dest_lat: alt.latitude, dest_lng: alt.longitude, distance_km: r1.distance_km, duration_minutes: r1.duration_min })
+            .update({ dest_lat: alt.latitude, dest_lng: alt.longitude, distance_km: r1.distance_km, duration_minutes: r1.duration_min, ...(seg.stop_kind === "fuel" ? { destination_name: alt.name } : {}) })
             .eq("id", segId);
         }
 
@@ -1099,7 +1107,7 @@ export default function TripDetailScreen() {
           if (r2.distance_km != null) {
             await supabase
               .from("segments")
-              .update({ origin_lat: alt.latitude, origin_lng: alt.longitude, distance_km: r2.distance_km, duration_minutes: r2.duration_min })
+              .update({ origin_lat: alt.latitude, origin_lng: alt.longitude, distance_km: r2.distance_km, duration_minutes: r2.duration_min, ...(seg.stop_kind === "fuel" ? { origin_name: alt.name } : {}) })
               .eq("id", nextSeg.id);
           }
         }
@@ -1334,17 +1342,36 @@ export default function TripDetailScreen() {
         const chosenIdx = newSegs.findIndex((s) => s.isChosenPoint);
         const chosenSeg = (inserted ?? []).find((seg) => seg.order_index === origOrderIndex + chosenIdx);
         if (chosenSeg) {
-          await supabase.from("stop_suggestions").insert({
-            segment_id: chosenSeg.id,
-            place_id: chosenPlaceId,
-            name: chosenResult.name,
-            rating: chosenResult.rating ?? null,
-            total_ratings: chosenResult.total_ratings ?? null,
-            is_24h: chosenResult.is_24h ?? null,
-            latitude: chosenResult.lat,
-            longitude: chosenResult.lng,
-            is_selected: true,
-          });
+          // O posto exato escolhido fica selecionado; os vizinhos entram como alternativas
+          // (não-selecionadas) para o botão de trocar posto (⇄) ter opções.
+          const { results: nearby } = await fetchStopSuggestions(chosenResult.lat, chosenResult.lng);
+          const rows = [
+            {
+              segment_id: chosenSeg.id,
+              place_id: chosenPlaceId,
+              name: chosenResult.name,
+              rating: chosenResult.rating ?? null,
+              total_ratings: chosenResult.total_ratings ?? null,
+              is_24h: chosenResult.is_24h ?? null,
+              latitude: chosenResult.lat,
+              longitude: chosenResult.lng,
+              is_selected: true,
+            },
+            ...nearby
+              .filter((n) => n.place_id !== chosenPlaceId)
+              .map((n) => ({
+                segment_id: chosenSeg.id,
+                place_id: n.place_id,
+                name: n.name,
+                rating: n.rating,
+                total_ratings: n.total_ratings,
+                is_24h: n.is_24h,
+                latitude: n.latitude,
+                longitude: n.longitude,
+                is_selected: false,
+              })),
+          ];
+          await supabase.from("stop_suggestions").insert(rows);
         }
       }
 
