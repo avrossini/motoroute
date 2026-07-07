@@ -14,6 +14,7 @@ import {
 } from "react-native";
 import { router } from "expo-router";
 import { getSupabase } from "@/services/supabase";
+import { pickImage } from "@/platform/image-picker";
 
 export default function EditarPerfilScreen() {
   const [displayName, setDisplayName] = useState("");
@@ -21,6 +22,7 @@ export default function EditarPerfilScreen() {
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [uploading, setUploading] = useState(false);
 
   useEffect(() => {
     load();
@@ -42,6 +44,38 @@ export default function EditarPerfilScreen() {
       }
     }
     setLoading(false);
+  }
+
+  // Foto de perfil: escolhe imagem, sobe para o bucket 'avatars' (path por uid),
+  // grava avatar_url com ?v=timestamp (cache-bust do CDN). Web usa <input>, nativo picker.
+  async function onPickAvatar() {
+    const picked = await pickImage();
+    if (!picked) return;
+    setUploading(true);
+    const supabase = getSupabase();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      setUploading(false);
+      return;
+    }
+    const path = `${user.id}/avatar.jpg`;
+    const { error: upErr } = await supabase.storage
+      .from("avatars")
+      .upload(path, picked.blob, { upsert: true, contentType: picked.mimeType || "image/jpeg" });
+    if (upErr) {
+      setUploading(false);
+      Alert.alert("Erro ao enviar foto", upErr.message);
+      return;
+    }
+    const { data: pub } = supabase.storage.from("avatars").getPublicUrl(path);
+    const url = `${pub.publicUrl}?v=${Date.now()}`;
+    const { error: updErr } = await supabase.from("profiles").update({ avatar_url: url }).eq("id", user.id);
+    setUploading(false);
+    if (updErr) {
+      Alert.alert("Erro ao salvar foto", updErr.message);
+      return;
+    }
+    setAvatarUrl(url);
   }
 
   async function save() {
@@ -115,14 +149,21 @@ export default function EditarPerfilScreen() {
 
       <ScrollView style={styles.container} contentContainerStyle={{ paddingBottom: 40 }}>
         <View style={styles.avatarWrap}>
-          {avatarUrl ? (
-            <Image source={{ uri: avatarUrl }} style={styles.avatarImg} />
-          ) : (
-            <View style={styles.avatar}>
-              <Text style={styles.avatarLetter}>{letter}</Text>
-            </View>
-          )}
-          <Text style={styles.avatarHint}>Foto de perfil — em breve</Text>
+          <TouchableOpacity onPress={onPickAvatar} activeOpacity={0.8} disabled={uploading}>
+            {avatarUrl ? (
+              <Image source={{ uri: avatarUrl }} style={styles.avatarImg} />
+            ) : (
+              <View style={styles.avatar}>
+                <Text style={styles.avatarLetter}>{letter}</Text>
+              </View>
+            )}
+            {uploading && (
+              <View style={styles.avatarOverlay}>
+                <ActivityIndicator color="#fff" />
+              </View>
+            )}
+          </TouchableOpacity>
+          <Text style={styles.avatarHint}>{uploading ? "Enviando…" : "Toque para trocar a foto"}</Text>
         </View>
 
         <View style={styles.group}>
@@ -214,7 +255,12 @@ const styles = StyleSheet.create({
   },
   avatarImg: { width: 84, height: 84, borderRadius: 42, backgroundColor: "#eee" },
   avatarLetter: { fontSize: 34, fontWeight: "700", color: "#fff" },
-  avatarHint: { fontSize: 12, color: "#aaa" },
+  avatarOverlay: {
+    position: "absolute", top: 0, left: 0, right: 0, bottom: 0,
+    borderRadius: 42, backgroundColor: "rgba(0,0,0,0.45)",
+    alignItems: "center", justifyContent: "center",
+  },
+  avatarHint: { fontSize: 12, color: "#C97826", fontWeight: "600" },
 
   group: { marginHorizontal: 16, marginTop: 24 },
   groupLabel: { fontSize: 11, fontWeight: "700", color: "#999", letterSpacing: 0.8, marginBottom: 8 },
