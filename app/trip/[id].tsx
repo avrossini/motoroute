@@ -831,7 +831,12 @@ export default function TripDetailScreen() {
     // último); a virada precisa ser filtrada à parte para não pendurar um ⛽ indevido.
     const isTurnaround = (seg: Segment) =>
       trip?.trip_type === "day_trip" && !!trip?.round_trip && seg.destination_name === trip.destination;
-    const intermediateSegs = segs.slice(0, -1).filter((seg) => !isTurnaround(seg));
+    // stop_kind 'fuel' = posto exato fixado pelo usuário na inserção manual: nunca re-buscar
+    // (senão o snap-por-rating troca o posto escolhido). 'poi' e null (automático) seguem
+    // ganhando o posto vizinho normalmente.
+    const intermediateSegs = segs
+      .slice(0, -1)
+      .filter((seg) => !isTurnaround(seg) && seg.stop_kind !== "fuel");
     if (intermediateSegs.length === 0) return;
 
     const { data: { user: authUser } } = await supabase.auth.getUser();
@@ -879,6 +884,8 @@ export default function TripDetailScreen() {
     for (let i = 0; i < intermediate.length; i += BATCH) {
       await Promise.allSettled(
         intermediate.slice(i, i + BATCH).map(async (seg, bi) => {
+          // Guard dentro do map (não filtrar o array) p/ preservar o alinhamento com trechos[i+bi].
+          if (seg.stop_kind === "fuel") return; // posto exato fixado — não re-buscar
           const chosen = trechos[i + bi]?.posto ?? null;
           const { results } = await fetchStopSuggestions(seg.dest_lat, seg.dest_lng);
           await supabase.from("stop_suggestions").delete().eq("segment_id", seg.id);
