@@ -626,6 +626,8 @@ export default function TripDetailScreen() {
   const [shareModal, setShareModal] = useState(false);
   const [shareEmail, setShareEmail] = useState("");
   const [shareSending, setShareSending] = useState(false);
+  // feedback inline (Alert é no-op no web) — sucesso/erro do compartilhamento
+  const [shareResult, setShareResult] = useState<{ ok: boolean; text: string } | null>(null);
   const [infoSheet, setInfoSheet] = useState<{
     creatorName: string; creatorAvatar: string | null; sharedByName: string | null;
   } | null>(null);
@@ -1010,22 +1012,22 @@ export default function TripDetailScreen() {
   async function submitShare() {
     const email = shareEmail.trim();
     if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
-      Alert.alert("E-mail inválido", "Informe um e-mail válido.");
+      setShareResult({ ok: false, text: "Informe um e-mail válido." });
       return;
     }
+    setShareResult(null);
     setShareSending(true);
     const { error } = await getSupabase().rpc("share_trip", { p_trip_id: id, p_recipient_email: email });
     setShareSending(false);
     if (error) {
-      Alert.alert("Não foi possível compartilhar", error.message);
+      setShareResult({ ok: false, text: "Não foi possível compartilhar. Tente novamente." });
       return;
     }
-    setShareModal(false);
     setShareEmail("");
-    Alert.alert(
-      "Convite enviado",
-      "Se o e-mail pertencer a um piloto do MotoRoute, ele receberá o convite para aceitar uma cópia da viagem."
-    );
+    setShareResult({
+      ok: true,
+      text: "Convite enviado! Se o e-mail for de um piloto do MotoRoute, ele decide se aceita uma cópia.",
+    });
   }
 
   // "Sobre esta viagem": resolve o perfil do autor original (created_by) e de quem
@@ -2598,7 +2600,7 @@ export default function TripDetailScreen() {
               {/* Social — compartilhar cópia + proveniência */}
               <TouchableOpacity
                 style={styles.menuRow}
-                onPress={() => { setMenuOpen(false); setShareEmail(""); setShareModal(true); }}
+                onPress={() => { setMenuOpen(false); setShareEmail(""); setShareResult(null); setShareModal(true); }}
               >
                 <Text style={styles.menuIcon}>📤</Text>
                 <Text style={styles.menuLabel}>Compartilhar viagem</Text>
@@ -2660,19 +2662,26 @@ export default function TripDetailScreen() {
                 onSubmitEditing={submitShare}
                 returnKeyType="send"
               />
-              <TouchableOpacity
-                style={[styles.shareSendBtn, shareSending && { opacity: 0.6 }]}
-                onPress={submitShare}
-                disabled={shareSending}
-              >
-                {shareSending ? (
-                  <ActivityIndicator color="#fff" size="small" />
-                ) : (
-                  <Text style={styles.shareSendText}>Compartilhar →</Text>
-                )}
-              </TouchableOpacity>
+              {!shareResult?.ok && (
+                <TouchableOpacity
+                  style={[styles.shareSendBtn, shareSending && { opacity: 0.6 }]}
+                  onPress={submitShare}
+                  disabled={shareSending}
+                >
+                  {shareSending ? (
+                    <ActivityIndicator color="#fff" size="small" />
+                  ) : (
+                    <Text style={styles.shareSendText}>Compartilhar →</Text>
+                  )}
+                </TouchableOpacity>
+              )}
+              {shareResult && (
+                <Text style={shareResult.ok ? styles.shareResultOk : styles.shareResultErr}>
+                  {shareResult.text}
+                </Text>
+              )}
               <TouchableOpacity style={styles.modalCancelBtn} onPress={() => setShareModal(false)}>
-                <Text style={styles.modalCancelText}>Cancelar</Text>
+                <Text style={styles.modalCancelText}>{shareResult?.ok ? "Fechar" : "Cancelar"}</Text>
               </TouchableOpacity>
             </Pressable>
           </Pressable>
@@ -3769,6 +3778,8 @@ const styles = StyleSheet.create({
     alignItems: "center", marginTop: 12,
   },
   shareSendText: { color: "#fff", fontWeight: "700", fontSize: 15 },
+  shareResultOk: { marginTop: 12, fontSize: 13.5, color: "#16A34A", fontWeight: "600", lineHeight: 19 },
+  shareResultErr: { marginTop: 12, fontSize: 13.5, color: "#E53935", fontWeight: "600", lineHeight: 19 },
 
   // Sobre esta viagem
   infoCreatorRow: {

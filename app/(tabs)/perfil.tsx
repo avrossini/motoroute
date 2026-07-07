@@ -6,7 +6,6 @@ import {
   StyleSheet,
   ScrollView,
   Image,
-  Alert,
   ActivityIndicator,
 } from "react-native";
 import { router, useFocusEffect } from "expo-router";
@@ -37,6 +36,7 @@ export default function PerfilScreen() {
   const [loading, setLoading] = useState(true);
   const [confirmLogout, setConfirmLogout] = useState(false);
   const [respondingId, setRespondingId] = useState<string | null>(null);
+  const [notifMsg, setNotifMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const { notifications, refresh: refreshNotifs } = useNotifications();
 
   useFocusEffect(
@@ -86,6 +86,7 @@ export default function PerfilScreen() {
   // status='pending') → duplo-clique retorna erro em vez de forjar 2 cópias.
   async function respondShare(n: AppNotification, accept: boolean) {
     if (!n.entity_id || respondingId) return;
+    setNotifMsg(null);
     setRespondingId(n.id);
     const { error } = await getSupabase().rpc("respond_to_share", {
       p_share_id: n.entity_id,
@@ -93,13 +94,14 @@ export default function PerfilScreen() {
     });
     setRespondingId(null);
     if (error) {
-      Alert.alert("Não foi possível responder", error.message);
+      // feedback inline (Alert é no-op no web)
+      setNotifMsg({ ok: false, text: "Não foi possível responder. Tente novamente." });
       await refreshNotifs();
       return;
     }
     await refreshNotifs();
     if (accept) {
-      Alert.alert("Viagem adicionada!", "A cópia já está na sua aba Viagens.");
+      setNotifMsg({ ok: true, text: "Viagem adicionada à sua aba Viagens." });
     }
   }
 
@@ -138,6 +140,13 @@ export default function PerfilScreen() {
         </View>
         <Text style={styles.editHint}>Editar ›</Text>
       </TouchableOpacity>
+
+      {/* Feedback do aceite/recusa (Alert é no-op no web); toque para dispensar */}
+      {notifMsg && (
+        <TouchableOpacity style={styles.section} activeOpacity={0.8} onPress={() => setNotifMsg(null)}>
+          <Text style={notifMsg.ok ? styles.notifBannerOk : styles.notifBannerErr}>{notifMsg.text}</Text>
+        </TouchableOpacity>
+      )}
 
       {/* Notificações (convites de viagem + avisos) */}
       {unread.length > 0 && (
@@ -394,6 +403,14 @@ const styles = StyleSheet.create({
   notifAcceptText: { color: "#fff", fontWeight: "700", fontSize: 14 },
   notifDecline: { backgroundColor: "#F0F0F0" },
   notifDeclineText: { color: "#555", fontWeight: "600", fontSize: 14 },
+  notifBannerOk: {
+    backgroundColor: "#E7F6EC", color: "#16A34A", fontSize: 13.5, fontWeight: "600",
+    padding: 12, borderRadius: 10, overflow: "hidden",
+  },
+  notifBannerErr: {
+    backgroundColor: "#FDECEA", color: "#E53935", fontSize: 13.5, fontWeight: "600",
+    padding: 12, borderRadius: 10, overflow: "hidden",
+  },
 
   menuItem: {
     backgroundColor: "#fff",

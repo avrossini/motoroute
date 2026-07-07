@@ -21,7 +21,14 @@ export const pickImage: ImagePickerPlatform["pickImage"] = () =>
           : null
       );
     };
-    // se 'change' não disparar até logo após o foco voltar, tratamos como cancelamento
-    window.addEventListener("focus", () => setTimeout(() => done(null), 600), { once: true });
+    // navegadores modernos disparam 'cancel' ao fechar o diálogo sem escolher
+    input.oncancel = () => done(null);
+    // fallback: ao voltar o foco, só trata como cancelamento se NADA foi escolhido
+    // (o timeout dá tempo do 'change' popular input.files em devices lentos)
+    window.addEventListener(
+      "focus",
+      () => setTimeout(() => { if (!input.files || input.files.length === 0) done(null); }, 800),
+      { once: true }
+    );
     input.click();
   });

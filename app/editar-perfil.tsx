@@ -52,30 +52,38 @@ export default function EditarPerfilScreen() {
     const picked = await pickImage();
     if (!picked) return;
     setUploading(true);
-    const supabase = getSupabase();
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) {
+    try {
+      const supabase = getSupabase();
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        Alert.alert("Sessão expirada", "Faça login novamente.");
+        return;
+      }
+      const path = `${user.id}/avatar.jpg`;
+      const { error: upErr } = await supabase.storage
+        .from("avatars")
+        .upload(path, picked.blob, { upsert: true, contentType: picked.mimeType || "image/jpeg" });
+      if (upErr) {
+        Alert.alert("Erro ao enviar foto", upErr.message);
+        return;
+      }
+      const { data: pub } = supabase.storage.from("avatars").getPublicUrl(path);
+      const url = `${pub.publicUrl}?v=${Date.now()}`;
+      const { error: updErr } = await supabase.from("profiles").update({ avatar_url: url }).eq("id", user.id);
+      if (updErr) {
+        Alert.alert("Erro ao salvar foto", updErr.message);
+        return;
+      }
+      setAvatarUrl(url);
+    } catch (e: any) {
+      Alert.alert("Erro ao enviar foto", e?.message ?? "Tente novamente.");
+    } finally {
       setUploading(false);
-      return;
+      // libera o objectURL de preview (web); no exibimos a URL pública, então ele não é usado
+      if (picked.uri?.startsWith("blob:") && typeof URL !== "undefined" && URL.revokeObjectURL) {
+        URL.revokeObjectURL(picked.uri);
+      }
     }
-    const path = `${user.id}/avatar.jpg`;
-    const { error: upErr } = await supabase.storage
-      .from("avatars")
-      .upload(path, picked.blob, { upsert: true, contentType: picked.mimeType || "image/jpeg" });
-    if (upErr) {
-      setUploading(false);
-      Alert.alert("Erro ao enviar foto", upErr.message);
-      return;
-    }
-    const { data: pub } = supabase.storage.from("avatars").getPublicUrl(path);
-    const url = `${pub.publicUrl}?v=${Date.now()}`;
-    const { error: updErr } = await supabase.from("profiles").update({ avatar_url: url }).eq("id", user.id);
-    setUploading(false);
-    if (updErr) {
-      Alert.alert("Erro ao salvar foto", updErr.message);
-      return;
-    }
-    setAvatarUrl(url);
   }
 
   async function save() {
@@ -93,6 +101,11 @@ export default function EditarPerfilScreen() {
     setSaving(true);
     const supabase = getSupabase();
     const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      setSaving(false);
+      Alert.alert("Sessão expirada", "Faça login novamente.");
+      return;
+    }
 
     // disponibilidade do handle (case-insensitive, ignorando o próprio)
     if (h) {
@@ -100,7 +113,7 @@ export default function EditarPerfilScreen() {
         .from("profiles")
         .select("id")
         .eq("handle", h)
-        .neq("id", user!.id)
+        .neq("id", user.id)
         .maybeSingle();
       if (taken) {
         setSaving(false);
@@ -112,7 +125,7 @@ export default function EditarPerfilScreen() {
     const { error } = await supabase
       .from("profiles")
       .update({ display_name: name, handle: h || null })
-      .eq("id", user!.id);
+      .eq("id", user.id);
 
     setSaving(false);
     if (error) {
