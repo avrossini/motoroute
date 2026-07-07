@@ -5,6 +5,7 @@ import {
   TouchableOpacity,
   StyleSheet,
   ScrollView,
+  Image,
 } from "react-native";
 import { router, useFocusEffect } from "expo-router";
 import { getSupabase } from "@/services/supabase";
@@ -24,6 +25,7 @@ interface Motorcycle {
 interface UserInfo {
   email: string;
   name: string;
+  avatarUrl: string | null;
 }
 
 export default function PerfilScreen() {
@@ -49,8 +51,13 @@ export default function PerfilScreen() {
     if (authUser) {
       const email = authUser.email ?? "";
       const meta = authUser.user_metadata ?? {};
-      const name = meta.full_name ?? meta.name ?? email.split("@")[0] ?? "Usuário";
-      setUser({ email, name });
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("display_name, avatar_url")
+        .eq("id", authUser.id)
+        .maybeSingle();
+      const name = profile?.display_name ?? meta.full_name ?? meta.name ?? email.split("@")[0] ?? "Usuário";
+      setUser({ email, name, avatarUrl: profile?.avatar_url ?? null });
     }
 
     const { data } = await supabase
@@ -74,16 +81,25 @@ export default function PerfilScreen() {
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={{ paddingBottom: 40 }}>
-      {/* Header do perfil */}
-      <View style={styles.profileHeader}>
-        <View style={styles.avatar}>
-          <Text style={styles.avatarLetter}>{avatarLetter}</Text>
-        </View>
+      {/* Header do perfil (toca para editar nome/foto) */}
+      <TouchableOpacity
+        style={styles.profileHeader}
+        activeOpacity={0.8}
+        onPress={() => router.push("/editar-perfil" as never)}
+      >
+        {user?.avatarUrl ? (
+          <Image source={{ uri: user.avatarUrl }} style={styles.avatarImg} />
+        ) : (
+          <View style={styles.avatar}>
+            <Text style={styles.avatarLetter}>{avatarLetter}</Text>
+          </View>
+        )}
         <View style={styles.profileInfo}>
           <Text style={styles.profileName}>{user?.name ?? "—"}</Text>
           <Text style={styles.profileEmail}>{user?.email ?? "—"}</Text>
         </View>
-      </View>
+        <Text style={styles.editHint}>Editar ›</Text>
+      </TouchableOpacity>
 
       {/* Moto ativa */}
       <View style={styles.section}>
@@ -189,8 +205,10 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
   },
+  avatarImg: { width: 56, height: 56, borderRadius: 28, backgroundColor: "#333" },
   avatarLetter: { fontSize: 24, fontWeight: "700", color: "#fff" },
   profileInfo: { flex: 1 },
+  editHint: { fontSize: 12, color: "#C97826", fontWeight: "600" },
   profileName: { fontSize: 18, fontWeight: "700", color: "#fff" },
   profileEmail: { fontSize: 13, color: "#aaa", marginTop: 2 },
 
