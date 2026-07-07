@@ -1,7 +1,17 @@
 import { Tabs } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
+import { NotificationsProvider, useNotifications } from "@/context/notifications";
 
 export default function TabsLayout() {
+  return (
+    <NotificationsProvider>
+      <TabsInner />
+    </NotificationsProvider>
+  );
+}
+
+function TabsInner() {
+  const { unreadCount } = useNotifications();
   return (
     <Tabs
       screenOptions={{
@@ -52,6 +62,8 @@ export default function TabsLayout() {
         name="perfil"
         options={{
           title: "Perfil",
+          tabBarBadge: unreadCount > 0 ? unreadCount : undefined,
+          tabBarBadgeStyle: { backgroundColor: "#E53935", fontSize: 10 },
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="person-outline" size={size} color={color} />
           ),

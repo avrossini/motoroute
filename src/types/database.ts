@@ -38,7 +38,6 @@ export type Database = {
           {
             foreignKeyName: "admin_notes_author_admin_id_fkey"
             columns: ["author_admin_id"]
-            isOneToOne: false
             referencedRelation: "admin_users"
             referencedColumns: ["id"]
           },
@@ -73,7 +72,6 @@ export type Database = {
           {
             foreignKeyName: "admin_users_user_id_fkey"
             columns: ["user_id"]
-            isOneToOne: true
             referencedRelation: "users"
             referencedColumns: ["id"]
           },
@@ -129,14 +127,12 @@ export type Database = {
           {
             foreignKeyName: "api_usage_logs_trip_id_fkey"
             columns: ["trip_id"]
-            isOneToOne: false
             referencedRelation: "trips"
             referencedColumns: ["id"]
           },
           {
             foreignKeyName: "api_usage_logs_user_id_fkey"
             columns: ["user_id"]
-            isOneToOne: false
             referencedRelation: "users"
             referencedColumns: ["id"]
           },
@@ -183,21 +179,18 @@ export type Database = {
           {
             foreignKeyName: "checkins_segment_id_fkey"
             columns: ["segment_id"]
-            isOneToOne: false
             referencedRelation: "segments"
             referencedColumns: ["id"]
           },
           {
             foreignKeyName: "checkins_trip_id_fkey"
             columns: ["trip_id"]
-            isOneToOne: false
             referencedRelation: "trips"
             referencedColumns: ["id"]
           },
           {
             foreignKeyName: "checkins_user_id_fkey"
             columns: ["user_id"]
-            isOneToOne: false
             referencedRelation: "users"
             referencedColumns: ["id"]
           },
@@ -235,7 +228,6 @@ export type Database = {
           {
             foreignKeyName: "error_logs_user_id_fkey"
             columns: ["user_id"]
-            isOneToOne: false
             referencedRelation: "users"
             referencedColumns: ["id"]
           },
@@ -285,7 +277,6 @@ export type Database = {
           {
             foreignKeyName: "favorites_user_id_fkey"
             columns: ["user_id"]
-            isOneToOne: false
             referencedRelation: "users"
             referencedColumns: ["id"]
           },
@@ -335,14 +326,12 @@ export type Database = {
           {
             foreignKeyName: "invite_codes_created_by_admin_id_fkey"
             columns: ["created_by_admin_id"]
-            isOneToOne: false
             referencedRelation: "admin_users"
             referencedColumns: ["id"]
           },
           {
             foreignKeyName: "invite_codes_used_by_user_id_fkey"
             columns: ["used_by_user_id"]
-            isOneToOne: false
             referencedRelation: "users"
             referencedColumns: ["id"]
           },
@@ -446,7 +435,6 @@ export type Database = {
           {
             foreignKeyName: "lodging_suggestions_trip_id_fkey"
             columns: ["trip_id"]
-            isOneToOne: false
             referencedRelation: "trips"
             referencedColumns: ["id"]
           },
@@ -517,7 +505,92 @@ export type Database = {
           {
             foreignKeyName: "motorcycles_user_id_fkey"
             columns: ["user_id"]
-            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      notifications: {
+        Row: {
+          actor_id: string | null
+          created_at: string
+          data: Json
+          entity_id: string | null
+          entity_type: string | null
+          id: string
+          read_at: string | null
+          recipient_id: string
+          type: string
+        }
+        Insert: {
+          actor_id?: string | null
+          created_at?: string
+          data?: Json
+          entity_id?: string | null
+          entity_type?: string | null
+          id?: string
+          read_at?: string | null
+          recipient_id: string
+          type: string
+        }
+        Update: {
+          actor_id?: string | null
+          created_at?: string
+          data?: Json
+          entity_id?: string | null
+          entity_type?: string | null
+          id?: string
+          read_at?: string | null
+          recipient_id?: string
+          type?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "notifications_actor_id_fkey"
+            columns: ["actor_id"]
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "notifications_recipient_id_fkey"
+            columns: ["recipient_id"]
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      profiles: {
+        Row: {
+          avatar_url: string | null
+          bio: string | null
+          created_at: string
+          display_name: string | null
+          handle: string | null
+          id: string
+          updated_at: string
+        }
+        Insert: {
+          avatar_url?: string | null
+          bio?: string | null
+          created_at?: string
+          display_name?: string | null
+          handle?: string | null
+          id: string
+          updated_at?: string
+        }
+        Update: {
+          avatar_url?: string | null
+          bio?: string | null
+          created_at?: string
+          display_name?: string | null
+          handle?: string | null
+          id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "profiles_id_fkey"
+            columns: ["id"]
             referencedRelation: "users"
             referencedColumns: ["id"]
           },
@@ -603,7 +676,6 @@ export type Database = {
           {
             foreignKeyName: "segments_trip_id_fkey"
             columns: ["trip_id"]
-            isOneToOne: false
             referencedRelation: "trips"
             referencedColumns: ["id"]
           },
@@ -644,14 +716,12 @@ export type Database = {
           {
             foreignKeyName: "stop_comments_trip_id_fkey"
             columns: ["trip_id"]
-            isOneToOne: false
             referencedRelation: "trips"
             referencedColumns: ["id"]
           },
           {
             foreignKeyName: "stop_comments_user_id_fkey"
             columns: ["user_id"]
-            isOneToOne: false
             referencedRelation: "users"
             referencedColumns: ["id"]
           },
@@ -695,14 +765,12 @@ export type Database = {
           {
             foreignKeyName: "stop_ratings_trip_id_fkey"
             columns: ["trip_id"]
-            isOneToOne: false
             referencedRelation: "trips"
             referencedColumns: ["id"]
           },
           {
             foreignKeyName: "stop_ratings_user_id_fkey"
             columns: ["user_id"]
-            isOneToOne: false
             referencedRelation: "users"
             referencedColumns: ["id"]
           },
@@ -749,7 +817,6 @@ export type Database = {
           {
             foreignKeyName: "stop_suggestions_segment_id_fkey"
             columns: ["segment_id"]
-            isOneToOne: false
             referencedRelation: "segments"
             referencedColumns: ["id"]
           },
@@ -805,7 +872,67 @@ export type Database = {
           {
             foreignKeyName: "trip_days_trip_id_fkey"
             columns: ["trip_id"]
-            isOneToOne: false
+            referencedRelation: "trips"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      trip_shares: {
+        Row: {
+          copied_trip_id: string | null
+          created_at: string
+          id: string
+          recipient_email: string | null
+          recipient_id: string | null
+          responded_at: string | null
+          sender_id: string
+          status: string
+          trip_id: string
+        }
+        Insert: {
+          copied_trip_id?: string | null
+          created_at?: string
+          id?: string
+          recipient_email?: string | null
+          recipient_id?: string | null
+          responded_at?: string | null
+          sender_id: string
+          status?: string
+          trip_id: string
+        }
+        Update: {
+          copied_trip_id?: string | null
+          created_at?: string
+          id?: string
+          recipient_email?: string | null
+          recipient_id?: string | null
+          responded_at?: string | null
+          sender_id?: string
+          status?: string
+          trip_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "trip_shares_copied_trip_id_fkey"
+            columns: ["copied_trip_id"]
+            referencedRelation: "trips"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "trip_shares_recipient_id_fkey"
+            columns: ["recipient_id"]
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "trip_shares_sender_id_fkey"
+            columns: ["sender_id"]
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "trip_shares_trip_id_fkey"
+            columns: ["trip_id"]
             referencedRelation: "trips"
             referencedColumns: ["id"]
           },
@@ -815,6 +942,7 @@ export type Database = {
         Row: {
           completed_at: string | null
           created_at: string | null
+          created_by: string | null
           departure_date: string
           departure_time: string
           dest_lat: number | null
@@ -831,6 +959,8 @@ export type Database = {
           rating: number | null
           rating_note: string | null
           round_trip: boolean
+          shared_at: string | null
+          shared_by: string | null
           source_trip_id: string | null
           started_at: string | null
           status: string | null
@@ -841,10 +971,12 @@ export type Database = {
           trip_type: string | null
           updated_at: string | null
           user_id: string | null
+          visibility: string
         }
         Insert: {
           completed_at?: string | null
           created_at?: string | null
+          created_by?: string | null
           departure_date: string
           departure_time: string
           dest_lat?: number | null
@@ -861,6 +993,8 @@ export type Database = {
           rating?: number | null
           rating_note?: string | null
           round_trip?: boolean
+          shared_at?: string | null
+          shared_by?: string | null
           source_trip_id?: string | null
           started_at?: string | null
           status?: string | null
@@ -871,10 +1005,12 @@ export type Database = {
           trip_type?: string | null
           updated_at?: string | null
           user_id?: string | null
+          visibility?: string
         }
         Update: {
           completed_at?: string | null
           created_at?: string | null
+          created_by?: string | null
           departure_date?: string
           departure_time?: string
           dest_lat?: number | null
@@ -891,6 +1027,8 @@ export type Database = {
           rating?: number | null
           rating_note?: string | null
           round_trip?: boolean
+          shared_at?: string | null
+          shared_by?: string | null
           source_trip_id?: string | null
           started_at?: string | null
           status?: string | null
@@ -901,19 +1039,30 @@ export type Database = {
           trip_type?: string | null
           updated_at?: string | null
           user_id?: string | null
+          visibility?: string
         }
         Relationships: [
           {
+            foreignKeyName: "trips_created_by_fkey"
+            columns: ["created_by"]
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "trips_shared_by_fkey"
+            columns: ["shared_by"]
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "trips_source_trip_id_fkey"
             columns: ["source_trip_id"]
-            isOneToOne: false
             referencedRelation: "trips"
             referencedColumns: ["id"]
           },
           {
             foreignKeyName: "trips_user_id_fkey"
             columns: ["user_id"]
-            isOneToOne: false
             referencedRelation: "users"
             referencedColumns: ["id"]
           },
@@ -966,14 +1115,12 @@ export type Database = {
           {
             foreignKeyName: "user_feedback_trip_id_fkey"
             columns: ["trip_id"]
-            isOneToOne: false
             referencedRelation: "trips"
             referencedColumns: ["id"]
           },
           {
             foreignKeyName: "user_feedback_user_id_fkey"
             columns: ["user_id"]
-            isOneToOne: false
             referencedRelation: "users"
             referencedColumns: ["id"]
           },
@@ -1047,7 +1194,6 @@ export type Database = {
           {
             foreignKeyName: "user_preferences_user_id_fkey"
             columns: ["user_id"]
-            isOneToOne: true
             referencedRelation: "users"
             referencedColumns: ["id"]
           },
@@ -1094,7 +1240,6 @@ export type Database = {
           {
             foreignKeyName: "waitlist_linked_user_id_fkey"
             columns: ["linked_user_id"]
-            isOneToOne: false
             referencedRelation: "users"
             referencedColumns: ["id"]
           },
@@ -1135,7 +1280,6 @@ export type Database = {
           {
             foreignKeyName: "waypoints_trip_id_fkey"
             columns: ["trip_id"]
-            isOneToOne: false
             referencedRelation: "trips"
             referencedColumns: ["id"]
           },
@@ -1166,6 +1310,14 @@ export type Database = {
         }
         Returns: string
       }
+      fork_trip: {
+        Args: {
+          p_source_trip_id: string
+          p_new_owner: string
+          p_shared_by: string
+        }
+        Returns: string
+      }
       gen_random_bytes: {
         Args: {
           "": number
@@ -1193,6 +1345,20 @@ export type Database = {
           "": string
         }
         Returns: string
+      }
+      respond_to_share: {
+        Args: {
+          p_share_id: string
+          p_accept: boolean
+        }
+        Returns: Json
+      }
+      share_trip: {
+        Args: {
+          p_trip_id: string
+          p_recipient_email: string
+        }
+        Returns: Json
       }
       sign: {
         Args: {

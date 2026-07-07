@@ -521,16 +521,34 @@ Cada alternativa de parada pode exibir fotos do local para auxiliar na tomada de
 
 ---
 
-## Compartilhamento de roteiro (cópia independente)
+## Compartilhamento (Fase 1) — cópia independente por convite
 
-Quando um usuário compartilha um roteiro com outra pessoa:
+Passo 1 rumo a uma rede social de viagens de moto. Compartilhar cria uma **cópia independente** (fork) para o destinatário; **respeita a decisão dura "usuário único por viagem"** (cada um continua dono de UMA viagem). Schema, RPCs e RLS em `database.md` § "Compartilhamento de viagem — Fase 1".
 
-1. O destinatário recebe notificação (e-mail + push) com prévia do roteiro.
-2. Ao aceitar, o sistema cria uma cópia da viagem com `user_id` do destinatário (ele é o dono da cópia).
-3. O sistema aplica os parâmetros do destinatário (consumo da moto, km/dia, preferências de rota) no recálculo.
-4. O app exibe para o destinatário: *"Você recebeu este roteiro de [nome]. Pode não ser idêntico ao original — aplicamos seus parâmetros de viagem."* com opção de ver o roteiro original ou usar os próprios parâmetros.
-5. A cópia é completamente independente — nenhuma alteração de um afeta o outro.
-6. O sistema registra `source_trip_id` na cópia para rastreabilidade (sem impacto na UX do destinatário).
+**Enviar (o owner):** no menu ⋮ da viagem → "Compartilhar viagem" → informa o e-mail do destinatário. O sistema chama a RPC `share_trip`, que:
+1. Valida que quem chama é o dono da viagem.
+2. Resolve o e-mail para um usuário. **Se não existir, a resposta é idêntica** (`{status:'sent'}`) — nunca revela se o e-mail tem conta (anti-enumeração). Nada é persistido nesse caso.
+3. Bloqueia auto-compartilhamento.
+4. Cria um **convite `pending`** em `trip_shares` (idempotente: reenviar não duplica) + uma **notificação `trip_shared`** para o destinatário, com **snapshot** (título e rota da viagem, nome de quem enviou) que blinda o card contra edição/exclusão posterior da viagem.
+
+> Feedback do envio usa `Alert.alert`, que é no-op no RN-Web (padrão já existente no app) — no app nativo aparece "Convite enviado"; na web o modal apenas fecha. O convite é criado igualmente.
+
+**Receber e aceitar (o destinatário):** um **badge** com a contagem de não-lidas aparece na aba Perfil; a seção NOTIFICAÇÕES mostra o card *"{Fulano} compartilhou uma viagem com você"* com **Aceitar/Recusar**. Ao responder, o app chama a RPC `respond_to_share`:
+- **Atômica e à prova de duplo-clique:** `SELECT ... FOR UPDATE` + checagem `status='pending'` — um segundo clique (ou 2 dispositivos) recebe `already_responded`, nunca gera 2 cópias.
+- **Aceitar** → valida que a viagem de origem ainda existe (senão o convite vira `declined` com `source_deleted`), executa o **fork** (`fork_trip`), grava `copied_trip_id`, e **notifica o remetente** (`share_accepted`). A cópia aparece na aba Viagens do destinatário como `planned`.
+- **Recusar** → convite vira `declined`; nenhuma cópia é criada.
+- Em ambos os casos o convite é marcado como lido (badge zera).
+
+**A cópia (fork) é FIEL** — decisão revista em relação à ideia original de recalcular com os parâmetros do destinatário:
+- Clona estrutura completa: dias, waypoints, segmentos, paradas sugeridas e hospedagem.
+- **Preserva as escolhas**: parada selecionada por trecho (`is_selected`) e tipo de parada manual (`stop_kind` = posto/POI).
+- **Zera** estado e caches: `status='planned'`, sem `started_at`/`completed_at`/avaliação, sem clima/alertas; `created_at`/`updated_at` = agora.
+- **NÃO copia** check-ins, avaliações nem comentários (são do histórico de quem viajou).
+- É totalmente independente — edições de um lado não afetam o outro.
+
+**Proveniência ("Sobre esta viagem"):** o menu ⋮ tem "Sobre esta viagem", que mostra o **autor original** (`created_by`, preservado através do fork) com nome e avatar do perfil, a data de criação e os metadados da viagem; se for uma cópia recebida, exibe também "Recebida de {quem compartilhou}" (`shared_by`). `created_by` é o autor; `user_id` é o dono atual — no fork, `created_by` acompanha a viagem e `user_id` passa a ser o destinatário.
+
+**Perfil (fundação social):** cada usuário tem um `profiles` com `display_name` e `@handle` (editável em "Editar perfil"); `profiles` é legível por qualquer autenticado (sem e-mail), o que sustenta "Criada por {nome}" e perfis públicos futuros. Foto de perfil (bucket `avatars`) é fatia seguinte.
 
 ---
 

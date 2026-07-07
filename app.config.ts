@@ -29,7 +29,13 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     output: "server",
     favicon: "./assets/favicon.png",
   },
-  plugins: ["expo-router"],
+  plugins: [
+    "expo-router",
+    [
+      "expo-image-picker",
+      { photosPermission: "O MotoRoute usa suas fotos para você definir a foto de perfil." },
+    ],
+  ],
   scheme: "motoroute",
   extra: {
     supabaseUrl: process.env.EXPO_PUBLIC_SUPABASE_URL,

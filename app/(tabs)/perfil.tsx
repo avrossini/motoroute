@@ -5,9 +5,12 @@ import {
   TouchableOpacity,
   StyleSheet,
   ScrollView,
+  Image,
+  ActivityIndicator,
 } from "react-native";
 import { router, useFocusEffect } from "expo-router";
 import { getSupabase } from "@/services/supabase";
+import { useNotifications, AppNotification } from "@/context/notifications";
 
 interface Motorcycle {
   id: string;
@@ -24,6 +27,7 @@ interface Motorcycle {
 interface UserInfo {
   email: string;
   name: string;
+  avatarUrl: string | null;
 }
 
 export default function PerfilScreen() {
@@ -31,11 +35,15 @@ export default function PerfilScreen() {
   const [moto, setMoto] = useState<Motorcycle | null>(null);
   const [loading, setLoading] = useState(true);
   const [confirmLogout, setConfirmLogout] = useState(false);
+  const [respondingId, setRespondingId] = useState<string | null>(null);
+  const [notifMsg, setNotifMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const { notifications, refresh: refreshNotifs } = useNotifications();
 
   useFocusEffect(
     useCallback(() => {
       load();
-    }, [])
+      refreshNotifs();
+    }, [refreshNotifs])
   );
 
   useEffect(() => {
@@ -49,8 +57,13 @@ export default function PerfilScreen() {
     if (authUser) {
       const email = authUser.email ?? "";
       const meta = authUser.user_metadata ?? {};
-      const name = meta.full_name ?? meta.name ?? email.split("@")[0] ?? "Usuário";
-      setUser({ email, name });
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("display_name, avatar_url")
+        .eq("id", authUser.id)
+        .maybeSingle();
+      const name = profile?.display_name ?? meta.full_name ?? meta.name ?? email.split("@")[0] ?? "Usuário";
+      setUser({ email, name, avatarUrl: profile?.avatar_url ?? null });
     }
 
     const { data } = await supabase
@@ -69,21 +82,88 @@ export default function PerfilScreen() {
     router.replace("/(auth)/login" as never);
   }
 
+  // Aceitar/recusar convite de viagem. respond_to_share é atômico (FOR UPDATE +
+  // status='pending') → duplo-clique retorna erro em vez de forjar 2 cópias.
+  async function respondShare(n: AppNotification, accept: boolean) {
+    if (!n.entity_id || respondingId) return;
+    setNotifMsg(null);
+    setRespondingId(n.id);
+    const { error } = await getSupabase().rpc("respond_to_share", {
+      p_share_id: n.entity_id,
+      p_accept: accept,
+    });
+    setRespondingId(null);
+    if (error) {
+      // feedback inline (Alert é no-op no web)
+      setNotifMsg({ ok: false, text: "Não foi possível responder. Tente novamente." });
+      await refreshNotifs();
+      return;
+    }
+    await refreshNotifs();
+    if (accept) {
+      setNotifMsg({ ok: true, text: "Viagem adicionada à sua aba Viagens." });
+    }
+  }
+
+  // Notificações informativas (ex.: convite aceito) — só marca como lida.
+  async function dismissNotif(n: AppNotification) {
+    await getSupabase()
+      .from("notifications")
+      .update({ read_at: new Date().toISOString() })
+      .eq("id", n.id);
+    await refreshNotifs();
+  }
+
+  const unread = notifications.filter((n) => !n.read_at);
+
   const avatarLetter = user?.name?.[0]?.toUpperCase() ?? "?";
   const autonomia = moto ? Math.round(moto.fuel_economy_km_l * moto.tank_liters) : null;
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={{ paddingBottom: 40 }}>
-      {/* Header do perfil */}
-      <View style={styles.profileHeader}>
-        <View style={styles.avatar}>
-          <Text style={styles.avatarLetter}>{avatarLetter}</Text>
-        </View>
+      {/* Header do perfil (toca para editar nome/foto) */}
+      <TouchableOpacity
+        style={styles.profileHeader}
+        activeOpacity={0.8}
+        onPress={() => router.push("/editar-perfil" as never)}
+      >
+        {user?.avatarUrl ? (
+          <Image source={{ uri: user.avatarUrl }} style={styles.avatarImg} />
+        ) : (
+          <View style={styles.avatar}>
+            <Text style={styles.avatarLetter}>{avatarLetter}</Text>
+          </View>
+        )}
         <View style={styles.profileInfo}>
           <Text style={styles.profileName}>{user?.name ?? "—"}</Text>
           <Text style={styles.profileEmail}>{user?.email ?? "—"}</Text>
         </View>
-      </View>
+        <Text style={styles.editHint}>Editar ›</Text>
+      </TouchableOpacity>
+
+      {/* Feedback do aceite/recusa (Alert é no-op no web); toque para dispensar */}
+      {notifMsg && (
+        <TouchableOpacity style={styles.section} activeOpacity={0.8} onPress={() => setNotifMsg(null)}>
+          <Text style={notifMsg.ok ? styles.notifBannerOk : styles.notifBannerErr}>{notifMsg.text}</Text>
+        </TouchableOpacity>
+      )}
+
+      {/* Notificações (convites de viagem + avisos) */}
+      {unread.length > 0 && (
+        <View style={styles.section}>
+          <Text style={styles.sectionLabel}>NOTIFICAÇÕES</Text>
+          {unread.map((n) => (
+            <NotificationCard
+              key={n.id}
+              n={n}
+              busy={respondingId === n.id}
+              onAccept={() => respondShare(n, true)}
+              onDecline={() => respondShare(n, false)}
+              onDismiss={() => dismissNotif(n)}
+            />
+          ))}
+        </View>
+      )}
 
       {/* Moto ativa */}
       <View style={styles.section}>
@@ -159,6 +239,74 @@ export default function PerfilScreen() {
   );
 }
 
+function NotificationCard({
+  n,
+  busy,
+  onAccept,
+  onDecline,
+  onDismiss,
+}: {
+  n: AppNotification;
+  busy: boolean;
+  onAccept: () => void;
+  onDecline: () => void;
+  onDismiss: () => void;
+}) {
+  const actor = n.data?.actor_name ?? "Alguém";
+
+  if (n.type === "trip_shared") {
+    return (
+      <View style={styles.notifCard}>
+        <Text style={styles.notifText}>
+          <Text style={styles.notifBold}>{actor}</Text> compartilhou uma viagem com você.
+        </Text>
+        {n.data?.trip_title ? (
+          <Text style={styles.notifTripTitle}>{n.data.trip_title}</Text>
+        ) : null}
+        {n.data?.trip_route ? (
+          <Text style={styles.notifTripRoute}>{n.data.trip_route}</Text>
+        ) : null}
+        <View style={styles.notifActions}>
+          <TouchableOpacity
+            style={[styles.notifBtn, styles.notifDecline]}
+            onPress={onDecline}
+            disabled={busy}
+          >
+            <Text style={styles.notifDeclineText}>Recusar</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.notifBtn, styles.notifAccept]}
+            onPress={onAccept}
+            disabled={busy}
+          >
+            {busy ? (
+              <ActivityIndicator color="#fff" size="small" />
+            ) : (
+              <Text style={styles.notifAcceptText}>Aceitar</Text>
+            )}
+          </TouchableOpacity>
+        </View>
+      </View>
+    );
+  }
+
+  // Informativa (ex.: share_accepted) — só "OK" (marca lida)
+  const msg =
+    n.type === "share_accepted"
+      ? `${actor} aceitou a viagem que você compartilhou.`
+      : (n.data?.message ?? "Nova notificação.");
+  return (
+    <View style={styles.notifCard}>
+      <Text style={styles.notifText}>{msg}</Text>
+      <View style={styles.notifActions}>
+        <TouchableOpacity style={[styles.notifBtn, styles.notifDecline]} onPress={onDismiss}>
+          <Text style={styles.notifDeclineText}>OK</Text>
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
+}
+
 function MenuItem({ icon, label, onPress }: { icon: string; label: string; onPress: () => void }) {
   return (
     <TouchableOpacity style={styles.menuItem} onPress={onPress} activeOpacity={0.7}>
@@ -189,8 +337,10 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
   },
+  avatarImg: { width: 56, height: 56, borderRadius: 28, backgroundColor: "#333" },
   avatarLetter: { fontSize: 24, fontWeight: "700", color: "#fff" },
   profileInfo: { flex: 1 },
+  editHint: { fontSize: 12, color: "#C97826", fontWeight: "600" },
   profileName: { fontSize: 18, fontWeight: "700", color: "#fff" },
   profileEmail: { fontSize: 13, color: "#aaa", marginTop: 2 },
 
@@ -231,6 +381,36 @@ const styles = StyleSheet.create({
   motoEmptyIcon: { fontSize: 28 },
   motoEmptyTitle: { fontSize: 15, fontWeight: "700", color: "#1A1A1A" },
   motoEmptyDesc: { fontSize: 12, color: "#888", marginTop: 2, maxWidth: 200 },
+
+  notifCard: {
+    backgroundColor: "#fff",
+    borderRadius: 12,
+    padding: 14,
+    marginBottom: 8,
+    borderLeftWidth: 3,
+    borderLeftColor: "#C97826",
+  },
+  notifText: { fontSize: 14, color: "#333", lineHeight: 20 },
+  notifBold: { fontWeight: "700", color: "#1A1A1A" },
+  notifTripTitle: { fontSize: 15, fontWeight: "700", color: "#1A1A1A", marginTop: 6 },
+  notifTripRoute: { fontSize: 12.5, color: "#888", marginTop: 2 },
+  notifActions: { flexDirection: "row", gap: 8, justifyContent: "flex-end", marginTop: 12 },
+  notifBtn: {
+    paddingHorizontal: 18, paddingVertical: 9, borderRadius: 9,
+    alignItems: "center", justifyContent: "center", minWidth: 92,
+  },
+  notifAccept: { backgroundColor: "#16A34A" },
+  notifAcceptText: { color: "#fff", fontWeight: "700", fontSize: 14 },
+  notifDecline: { backgroundColor: "#F0F0F0" },
+  notifDeclineText: { color: "#555", fontWeight: "600", fontSize: 14 },
+  notifBannerOk: {
+    backgroundColor: "#E7F6EC", color: "#16A34A", fontSize: 13.5, fontWeight: "600",
+    padding: 12, borderRadius: 10, overflow: "hidden",
+  },
+  notifBannerErr: {
+    backgroundColor: "#FDECEA", color: "#E53935", fontSize: 13.5, fontWeight: "600",
+    padding: 12, borderRadius: 10, overflow: "hidden",
+  },
 
   menuItem: {
     backgroundColor: "#fff",

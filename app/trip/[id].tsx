@@ -547,6 +547,16 @@ function LodgingBlock({
   );
 }
 
+// Linha rótulo→valor do sheet "Sobre esta viagem"
+function InfoRow({ k, v }: { k: string; v: string }) {
+  return (
+    <View style={styles.infoRow}>
+      <Text style={styles.infoRowKey}>{k}</Text>
+      <Text style={styles.infoRowVal} numberOfLines={2}>{v}</Text>
+    </View>
+  );
+}
+
 export default function TripDetailScreen() {
   const { id, autoCalc } = useLocalSearchParams<{ id: string; autoCalc?: string }>();
   const [trip, setTrip] = useState<Trip | null>(null);
@@ -612,6 +622,15 @@ export default function TripDetailScreen() {
   const [wpResults, setWpResults] = useState<GeoResult[]>([]);
   const [wpSearching, setWpSearching] = useState(false);
   const [wpSaving, setWpSaving] = useState(false);
+  // Compartilhamento (Fase 1): enviar convite por e-mail + "Sobre esta viagem"
+  const [shareModal, setShareModal] = useState(false);
+  const [shareEmail, setShareEmail] = useState("");
+  const [shareSending, setShareSending] = useState(false);
+  // feedback inline (Alert é no-op no web) — sucesso/erro do compartilhamento
+  const [shareResult, setShareResult] = useState<{ ok: boolean; text: string } | null>(null);
+  const [infoSheet, setInfoSheet] = useState<{
+    creatorName: string; creatorAvatar: string | null; sharedByName: string | null;
+  } | null>(null);
   const [wpPending, setWpPending] = useState<{ result: GeoResult; segIndex: number; splitSeg: (typeof segments)[0] } | null>(null);
   const [wpImpact, setWpImpact] = useState<{
     deviationKm: number;
@@ -986,6 +1005,53 @@ export default function TripDetailScreen() {
     await supabase.from("trips").update({ status: "saved" }).eq("id", trip.id);
     await load();
     Alert.alert("Roteiro salvo!", "Encontrado na aba 'Salvas' em Viagens.");
+  }
+
+  // Compartilhar: cria um convite pending + notificação para o destinatário (fork no aceite).
+  // A RPC nunca vaza se o e-mail existe → resposta é sempre "convite enviado".
+  async function submitShare() {
+    const email = shareEmail.trim();
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
+      setShareResult({ ok: false, text: "Informe um e-mail válido." });
+      return;
+    }
+    setShareResult(null);
+    setShareSending(true);
+    const { error } = await getSupabase().rpc("share_trip", { p_trip_id: id, p_recipient_email: email });
+    setShareSending(false);
+    if (error) {
+      setShareResult({ ok: false, text: "Não foi possível compartilhar. Tente novamente." });
+      return;
+    }
+    setShareEmail("");
+    setShareResult({
+      ok: true,
+      text: "Convite enviado! Se o e-mail for de um piloto do MotoRoute, ele decide se aceita uma cópia.",
+    });
+  }
+
+  // "Sobre esta viagem": resolve o perfil do autor original (created_by) e de quem
+  // compartilhou (shared_by). profiles é legível por qualquer autenticado (sem e-mail).
+  async function openInfoSheet() {
+    if (!trip) return;
+    const ids = [trip.created_by, trip.shared_by].filter(Boolean) as string[];
+    let creatorName = "—";
+    let creatorAvatar: string | null = null;
+    let sharedByName: string | null = null;
+    if (ids.length > 0) {
+      const { data: profs } = await getSupabase()
+        .from("profiles")
+        .select("id, display_name, avatar_url")
+        .in("id", ids);
+      const byId = new Map((profs ?? []).map((p) => [p.id, p]));
+      if (trip.created_by) {
+        const c = byId.get(trip.created_by);
+        creatorName = c?.display_name ?? "—";
+        creatorAvatar = c?.avatar_url ?? null;
+      }
+      if (trip.shared_by) sharedByName = byId.get(trip.shared_by)?.display_name ?? null;
+    }
+    setInfoSheet({ creatorName, creatorAvatar, sharedByName });
   }
 
   async function startTrip() {
@@ -2531,6 +2597,22 @@ export default function TripDetailScreen() {
                 </TouchableOpacity>
               )}
 
+              {/* Social — compartilhar cópia + proveniência */}
+              <TouchableOpacity
+                style={styles.menuRow}
+                onPress={() => { setMenuOpen(false); setShareEmail(""); setShareResult(null); setShareModal(true); }}
+              >
+                <Text style={styles.menuIcon}>📤</Text>
+                <Text style={styles.menuLabel}>Compartilhar viagem</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.menuRow}
+                onPress={() => { setMenuOpen(false); openInfoSheet(); }}
+              >
+                <Text style={styles.menuIcon}>ℹ️</Text>
+                <Text style={styles.menuLabel}>Sobre esta viagem</Text>
+              </TouchableOpacity>
+
               {/* Destrutivo */}
               {trip.status !== "completed" && (
                 <>
@@ -2548,6 +2630,119 @@ export default function TripDetailScreen() {
 
               <TouchableOpacity style={styles.menuCancel} onPress={() => setMenuOpen(false)}>
                 <Text style={styles.menuCancelText}>Fechar</Text>
+              </TouchableOpacity>
+            </Pressable>
+          </Pressable>
+        </Modal>
+
+        {/* Compartilhar viagem — envia convite por e-mail (fork no aceite) */}
+        <Modal
+          visible={shareModal}
+          transparent
+          animationType="slide"
+          onRequestClose={() => setShareModal(false)}
+        >
+          <Pressable style={styles.modalOverlay} onPress={() => setShareModal(false)}>
+            <Pressable style={styles.modalSheet} onPress={() => {}}>
+              <View style={styles.modalHandle} />
+              <Text style={styles.modalTitle}>Compartilhar viagem</Text>
+              <Text style={styles.shareHint}>
+                Envie uma cópia para outro piloto do MotoRoute. Ele recebe um convite e decide se
+                aceita — as edições de vocês ficam independentes.
+              </Text>
+              <TextInput
+                style={styles.wpSearchInput}
+                value={shareEmail}
+                onChangeText={setShareEmail}
+                placeholder="email@exemplo.com"
+                placeholderTextColor="#aaa"
+                keyboardType="email-address"
+                autoCapitalize="none"
+                autoCorrect={false}
+                onSubmitEditing={submitShare}
+                returnKeyType="send"
+              />
+              {!shareResult?.ok && (
+                <TouchableOpacity
+                  style={[styles.shareSendBtn, shareSending && { opacity: 0.6 }]}
+                  onPress={submitShare}
+                  disabled={shareSending}
+                >
+                  {shareSending ? (
+                    <ActivityIndicator color="#fff" size="small" />
+                  ) : (
+                    <Text style={styles.shareSendText}>Compartilhar →</Text>
+                  )}
+                </TouchableOpacity>
+              )}
+              {shareResult && (
+                <Text style={shareResult.ok ? styles.shareResultOk : styles.shareResultErr}>
+                  {shareResult.text}
+                </Text>
+              )}
+              <TouchableOpacity style={styles.modalCancelBtn} onPress={() => setShareModal(false)}>
+                <Text style={styles.modalCancelText}>{shareResult?.ok ? "Fechar" : "Cancelar"}</Text>
+              </TouchableOpacity>
+            </Pressable>
+          </Pressable>
+        </Modal>
+
+        {/* Sobre esta viagem — autor original + proveniência + metadados */}
+        <Modal
+          visible={infoSheet != null}
+          transparent
+          animationType="slide"
+          onRequestClose={() => setInfoSheet(null)}
+        >
+          <Pressable style={styles.modalOverlay} onPress={() => setInfoSheet(null)}>
+            <Pressable style={styles.modalSheet} onPress={() => {}}>
+              <View style={styles.modalHandle} />
+              <Text style={styles.modalTitle}>Sobre esta viagem</Text>
+              {infoSheet && trip && (
+                <>
+                  <View style={styles.infoCreatorRow}>
+                    {infoSheet.creatorAvatar ? (
+                      <Image source={{ uri: infoSheet.creatorAvatar }} style={styles.infoAvatarImg} />
+                    ) : (
+                      <View style={styles.infoAvatar}>
+                        <Text style={styles.infoAvatarLetter}>
+                          {(infoSheet.creatorName[0] ?? "?").toUpperCase()}
+                        </Text>
+                      </View>
+                    )}
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.infoCreatorName}>Criada por {infoSheet.creatorName}</Text>
+                      <Text style={styles.infoCreatorDate}>
+                        {trip.created_at
+                          ? new Date(trip.created_at).toLocaleDateString("pt-BR", {
+                              day: "2-digit", month: "long", year: "numeric",
+                            })
+                          : ""}
+                      </Text>
+                    </View>
+                  </View>
+                  {infoSheet.sharedByName && (
+                    <View style={styles.infoSharedBanner}>
+                      <Text style={styles.infoSharedText}>
+                        📤 Recebida de {infoSheet.sharedByName}
+                      </Text>
+                    </View>
+                  )}
+                  <InfoRow k="Rota" v={`${trip.origin} → ${trip.destination}`} />
+                  <InfoRow
+                    k="Tipo"
+                    v={isDayTrip
+                      ? (trip.round_trip ? "Rolê · ida e volta" : "Rolê")
+                      : `Expedição · ${trip.num_days ?? 1} dias`}
+                  />
+                  {trip.total_distance_km != null && (
+                    <InfoRow k="Distância" v={`${Math.round(trip.total_distance_km)} km`} />
+                  )}
+                  <InfoRow k="Paradas" v={String(trip.stop_count ?? 0)} />
+                </>
+              )}
+              <TouchableOpacity style={styles.modalCancelBtn} onPress={() => setInfoSheet(null)}>
+                <Text style={styles.modalCancelText}>Fechar</Text>
               </TouchableOpacity>
             </Pressable>
           </Pressable>
@@ -3575,6 +3770,41 @@ const styles = StyleSheet.create({
     borderRadius: 12, backgroundColor: "#F5F5F5",
   },
   modalCancelText: { fontSize: 15, color: "#555", fontWeight: "600" },
+
+  // Compartilhar
+  shareHint: { fontSize: 13, color: "#888", lineHeight: 19, marginBottom: 14 },
+  shareSendBtn: {
+    backgroundColor: "#C97826", borderRadius: 12, paddingVertical: 14,
+    alignItems: "center", marginTop: 12,
+  },
+  shareSendText: { color: "#fff", fontWeight: "700", fontSize: 15 },
+  shareResultOk: { marginTop: 12, fontSize: 13.5, color: "#16A34A", fontWeight: "600", lineHeight: 19 },
+  shareResultErr: { marginTop: 12, fontSize: 13.5, color: "#E53935", fontWeight: "600", lineHeight: 19 },
+
+  // Sobre esta viagem
+  infoCreatorRow: {
+    flexDirection: "row", alignItems: "center", gap: 12,
+    backgroundColor: "#F7F7F8", borderRadius: 12, padding: 12, marginBottom: 10,
+  },
+  infoAvatar: {
+    width: 40, height: 40, borderRadius: 20, backgroundColor: "#C97826",
+    alignItems: "center", justifyContent: "center",
+  },
+  infoAvatarImg: { width: 40, height: 40, borderRadius: 20, backgroundColor: "#eee" },
+  infoAvatarLetter: { color: "#fff", fontWeight: "700", fontSize: 17 },
+  infoCreatorName: { fontSize: 14, fontWeight: "700", color: "#1A1A1A" },
+  infoCreatorDate: { fontSize: 12, color: "#888", marginTop: 2 },
+  infoSharedBanner: {
+    backgroundColor: "#FEF6EC", borderRadius: 12, padding: 12, marginBottom: 10,
+    borderWidth: 1, borderColor: "#F3D9B8",
+  },
+  infoSharedText: { fontSize: 13, color: "#9A5A12", fontWeight: "600" },
+  infoRow: {
+    flexDirection: "row", justifyContent: "space-between", gap: 16,
+    paddingVertical: 10, borderTopWidth: 1, borderTopColor: "#F0F0F0",
+  },
+  infoRowKey: { fontSize: 13, color: "#888" },
+  infoRowVal: { fontSize: 13, color: "#1A1A1A", fontWeight: "600", flexShrink: 1, textAlign: "right" },
 
   lodgingEmpty: {
     borderWidth: 1.5, borderColor: "#D0D0D0", borderStyle: "dashed",

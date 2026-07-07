@@ -94,6 +94,7 @@ export default function RootLayout() {
         <Stack.Screen name="favoritas" />
         <Stack.Screen name="preferencias" />
         <Stack.Screen name="minha-moto" />
+        <Stack.Screen name="editar-perfil" />
       </Stack>
     </>
   );
