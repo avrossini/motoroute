@@ -138,8 +138,8 @@ export default function ActiveTripScreen() {
     const restsBefore = cur
       ? restDays.filter((rd) => (rd.day_index ?? 0) < (cur.day_index ?? 1)).length
       : 0;
-    const STEP = 70; // largura do item (64) + gap (6)
-    stopsScrollRef.current?.scrollTo({ x: Math.max(0, (currentIndex + restsBefore) * STEP - 110), animated: true });
+    const STEP = 54; // largura da coluna do timeline
+    stopsScrollRef.current?.scrollTo({ x: Math.max(0, (currentIndex + restsBefore) * STEP - 120), animated: true });
   }, [loading, currentIndex, segments, restDays]);
 
   function openCheckinModal() {
@@ -339,78 +339,67 @@ export default function ActiveTripScreen() {
             {/* Progress */}
             <View style={styles.progressSection}>
               <Text style={styles.progressLabel}>PROGRESSO DA ROTA</Text>
-              <View style={styles.progressTrack}>
-                <View
-                  style={[
-                    styles.progressFill,
-                    { width: `${Math.round(progressPct * 100)}%` },
-                  ]}
-                />
-              </View>
               <ScrollView
                 ref={stopsScrollRef}
                 horizontal
                 showsHorizontalScrollIndicator={false}
-                contentContainerStyle={styles.stopsRow}
+                contentContainerStyle={styles.timelineRow}
               >
                 {(() => {
-                  // Intercala os dias parados (sem segmento) na trilha, na posição de
-                  // calendário certa: um rest day de day_index R aparece antes do primeiro
-                  // segmento cujo day_index > R. Marcador é read-only (não entra no check-in).
-                  const nodes: any[] = [];
+                  // Monta a lista ordenada (dias parados intercalados na posição de calendário)
+                  // e renderiza em ZIGUEZAGUE: cada parada alterna acima/abaixo da linha central.
+                  // Assim o nome só "colide" com o da mesma banda (2 posições adiante) e pode ser
+                  // mais largo, sem afastar as bolinhas nem cortar o texto.
+                  type TItem = { key: string; name: string; rest: boolean; state: "done" | "skipped" | "current" | "pending" };
+                  const items: TItem[] = [];
                   let ri = 0;
                   const pushRestsBefore = (dayIdx: number) => {
                     while (ri < restDays.length && restDays[ri].day_index < dayIdx) {
                       const rd = restDays[ri++];
-                      const city = (rd.city_name ?? "").split(",")[0] || "Descanso";
-                      nodes.push(
-                        <View key={`rest-${rd.day_index}`} style={styles.stopItem}>
-                          <View style={[styles.stopDot, styles.stopDotRest]}>
-                            <Text style={styles.stopRestIcon}>🛌</Text>
-                          </View>
-                          <Text style={styles.stopName} numberOfLines={2}>
-                            {city}
-                          </Text>
-                        </View>
-                      );
+                      items.push({ key: `rest-${rd.day_index}`, name: (rd.city_name ?? "").split(",")[0] || "Descanso", rest: true, state: "pending" });
                     }
                   };
                   segments.forEach((seg, i) => {
                     pushRestsBefore(seg.day_index ?? 1);
                     const c = checkinMap.get(seg.id);
-                    const isDone = c != null && !c.skipped;
-                    const isSkipped = c != null && c.skipped;
-                    const isCurrent = i === currentIndex;
-                    const shortName =
-                      i === 0
-                        ? seg.origin_name.split(",")[0]
-                        : seg.destination_name.split(",")[0];
-                    nodes.push(
-                      <View key={seg.id} style={styles.stopItem}>
-                        <View
-                          style={[
-                            styles.stopDot,
-                            isDone && styles.stopDotDone,
-                            isSkipped && styles.stopDotSkipped,
-                            isCurrent && styles.stopDotCurrent,
-                          ]}
-                        >
-                          {isDone && <Text style={styles.stopCheck}>✓</Text>}
+                    const state: TItem["state"] = c ? (c.skipped ? "skipped" : "done") : i === currentIndex ? "current" : "pending";
+                    const name = i === 0 ? seg.origin_name.split(",")[0] : seg.destination_name.split(",")[0];
+                    items.push({ key: seg.id, name, rest: false, state });
+                  });
+                  pushRestsBefore(Number.MAX_SAFE_INTEGER);
+
+                  return items.map((n, idx) => {
+                    const above = idx % 2 === 0;
+                    const reached = n.state !== "pending"; // linha laranja até onde já passou
+                    const nameEl = (
+                      <Text style={[styles.tlName, n.state === "current" && styles.tlNameCurrent]} numberOfLines={2}>
+                        {n.name}
+                      </Text>
+                    );
+                    const dotEl = (
+                      <View
+                        style={[
+                          styles.stopDot,
+                          styles.tlDot,
+                          n.state === "done" && styles.stopDotDone,
+                          n.state === "skipped" && styles.stopDotSkipped,
+                          n.state === "current" && styles.stopDotCurrent,
+                          n.rest && styles.stopDotRest,
+                        ]}
+                      >
+                        {n.state === "done" && <Text style={styles.stopCheck}>✓</Text>}
+                        {n.rest && <Text style={styles.stopRestIcon}>🛌</Text>}
+                      </View>
+                    );
+                    return (
+                      <View key={n.key} style={styles.tlCol}>
+                        <View style={[styles.tlLine, reached && styles.tlLineOn]} />
+                        <View style={above ? styles.tlHalfTop : styles.tlHalfBottom}>
+                          {above ? (<>{nameEl}{dotEl}</>) : (<>{dotEl}{nameEl}</>)}
                         </View>
-                        <Text
-                          style={[
-                            styles.stopName,
-                            isCurrent && styles.stopNameCurrent,
-                          ]}
-                          numberOfLines={2}
-                        >
-                          {shortName}
-                        </Text>
                       </View>
                     );
                   });
-                  pushRestsBefore(Number.MAX_SAFE_INTEGER); // dias parados no fim
-                  return nodes;
                 })()}
               </ScrollView>
             </View>
@@ -622,6 +611,17 @@ const styles = StyleSheet.create({
   // Scroll horizontal: centraliza quando cabe, rola quando há muitas paradas (nada de espremer)
   stopsRow: { flexGrow: 1, flexDirection: "row", justifyContent: "center", alignItems: "flex-start", gap: 6, paddingHorizontal: 4 },
   stopItem: { alignItems: "center", width: 64 },
+
+  // Timeline em ziguezague (paradas alternando acima/abaixo da linha central)
+  timelineRow: { flexGrow: 1, flexDirection: "row", justifyContent: "center", alignItems: "center", paddingHorizontal: 24, paddingTop: 2 },
+  tlCol: { width: 54, height: 112, alignItems: "center", position: "relative" },
+  tlLine: { position: "absolute", top: 54, left: 0, right: 0, height: 3, backgroundColor: "#2A2A2A" },
+  tlLineOn: { backgroundColor: "#C97826" },
+  tlHalfTop: { position: "absolute", top: 0, height: 55, width: 54, alignItems: "center", justifyContent: "flex-end" },
+  tlHalfBottom: { position: "absolute", top: 55, height: 55, width: 54, alignItems: "center", justifyContent: "flex-start" },
+  tlDot: { marginVertical: 3, zIndex: 1 },
+  tlName: { fontSize: 10, color: "#8A8A8A", textAlign: "center", lineHeight: 13, width: 96 },
+  tlNameCurrent: { color: "#C97826", fontWeight: "700" },
   stopDot: {
     width: 22,
     height: 22,
