@@ -13,7 +13,7 @@ export async function GET(request: Request): Promise<Response> {
 
   const authHeader = request.headers.get("Authorization") ?? `Bearer ${SUPABASE_ANON}`;
 
-  const select = "order_index,origin_name,destination_name,origin_lat,origin_lng,dest_lat,dest_lng,distance_km,duration_minutes,weather_condition,weather_temp_max,is_last_of_day,day_index";
+  const select = "order_index,origin_name,destination_name,origin_lat,origin_lng,dest_lat,dest_lng,distance_km,duration_minutes,weather_condition,weather_temp_max,is_last_of_day,day_index,stop_kind";
   const restUrl = `${SUPABASE_REST}/rest/v1/segments?trip_id=eq.${encodeURIComponent(tripId)}&select=${select}&order=order_index.asc`;
 
   const res = await fetch(restUrl, {
@@ -62,6 +62,7 @@ export async function GET(request: Request): Promise<Response> {
       weatherCondition: s.weather_condition ?? null,
       weatherTemp: s.weather_temp_max ?? null,
       dayIndex: s.day_index,
+      stopKind: s.stop_kind ?? null,
     }));
 
   return Response.json({ origin, destination, waypoints });

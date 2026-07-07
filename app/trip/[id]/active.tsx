@@ -72,6 +72,8 @@ export default function ActiveTripScreen() {
   const [checkinModal, setCheckinModal] = useState(false);
   const [checkinKm, setCheckinKm] = useState("");
   const [checkinFueled, setCheckinFueled] = useState(false);
+  // Posto associado a cada segmento (para o botão "Ir ao posto" quando a parada é um POI).
+  const [stopById, setStopById] = useState<Map<string, { name: string; lat: number; lng: number }>>(new Map());
 
   async function load() {
     const supabase = getSupabase();
@@ -103,6 +105,22 @@ export default function ActiveTripScreen() {
     setSegments(segsData ?? []);
     setCheckins(checkinsData ?? []);
     setRestDays(restDaysData ?? []);
+
+    // Posto selecionado de cada segmento (o POI usa isso no botão "Ir ao posto").
+    const segsForStops = segsData ?? [];
+    if (segsForStops.length > 0) {
+      const { data: stopsData } = await supabase
+        .from("stop_suggestions")
+        .select("segment_id,name,latitude,longitude")
+        .in("segment_id", segsForStops.map((s) => s.id))
+        .eq("is_selected", true);
+      const m = new Map<string, { name: string; lat: number; lng: number }>();
+      for (const s of stopsData ?? []) {
+        if (s.segment_id) m.set(s.segment_id, { name: s.name, lat: Number(s.latitude), lng: Number(s.longitude) });
+      }
+      setStopById(m);
+    }
+
     setLoading(false);
   }
 
@@ -400,6 +418,21 @@ export default function ActiveTripScreen() {
                 {currentSeg.destination_name.split(",")[0]}
               </Text>
             </TouchableOpacity>
+
+            {/* Parada é um POI: oferecer também navegar ao posto vizinho associado. */}
+            {currentSeg.stop_kind === "poi" && stopById.get(currentSeg.id) && (
+              <TouchableOpacity
+                style={{ borderWidth: 1.5, borderColor: "#C97826", borderRadius: 12, paddingVertical: 12, alignItems: "center", marginTop: 8 }}
+                onPress={() => {
+                  const p = stopById.get(currentSeg.id)!;
+                  openNavigation(p.lat, p.lng, p.name);
+                }}
+              >
+                <Text style={{ color: "#C97826", fontSize: 15, fontWeight: "700" }}>
+                  ⛽ Ir ao posto {stopById.get(currentSeg.id)!.name.split(",")[0]}
+                </Text>
+              </TouchableOpacity>
+            )}
 
             <TouchableOpacity
               style={[

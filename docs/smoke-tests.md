@@ -209,18 +209,34 @@ Se falhou, anote a mensagem de erro exata.
 
 ---
 
-### D2 — Adicionar parada manual ao roteiro
+### D2 — Adicionar parada manual: posto exato (⛽)
 
 **Pré-condição:** viagem "Teste SP-RJ" aberta  
 **Passos:**
-1. No roteiro, tocar em "Adicionar parada" (ou ícone "+")
-2. Buscar por "Resende, RJ"
-3. Confirmar a inserção
+1. No roteiro, tocar no "+" de um trecho
+2. Deixar o modo **⛽ Posto** (padrão) e buscar um posto específico (ex.: "Graal Barueri")
+3. Escolher o posto e confirmar a inserção
 
 **Resultado esperado:**
-- "Resende, RJ" aparece no roteiro na posição correta (entre SP e RJ)
-- Distâncias e tempos são recalculados automaticamente
-- Total da viagem é atualizado
+- A parada aparece na posição correta, e o card ⛽ mostra **exatamente** o posto escolhido (não outro de maior avaliação por perto), **sem** o ícone ⇄ de alternativas
+- No banco: o segmento tem `stop_kind='fuel'` e um `stop_suggestions is_selected` com o `place_id` escolhido
+- Distâncias, tempos e total são recalculados automaticamente
+
+---
+
+### D2b — Adicionar parada manual: ponto de interesse (📍)
+
+**Pré-condição:** viagem "Teste SP-RJ" aberta  
+**Passos:**
+1. No roteiro, tocar no "+" de um trecho
+2. Trocar para o modo **📍 Ponto de interesse** e buscar um POI (ex.: "Portal Rastro da Serpente")
+3. Escolher o POI e confirmar a inserção
+
+**Resultado esperado:**
+- O POI aparece como parada e **não** é substituído por um posto
+- O card fica **dividido**: à esquerda o POI (📍 "Ponto de interesse"), à direita o posto vizinho anexado automaticamente (⛽ + avaliação)
+- No mapa, o marcador do POI é **azul**; na viagem ativa, além de "Navegar para [POI]" aparece "Ir ao posto [nome]"
+- No banco: o segmento tem `stop_kind='poi'`
 
 ---
 

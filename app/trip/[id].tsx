@@ -33,6 +33,7 @@ import {
 } from "@/services/weatherService";
 import {
   fetchStopSuggestions,
+  fetchPlacesSearch,
   type StopSuggestion,
   type StopSuggestionsResult,
 } from "@/services/placesService";
@@ -98,6 +99,12 @@ interface GeoResult {
   address: string;
   lat: number;
   lng: number;
+  // Preenchidos pela busca Places da inserção manual (posto/POI). place_id fixa a escolha.
+  place_id?: string;
+  types?: string[];
+  rating?: number | null;
+  total_ratings?: number | null;
+  is_24h?: boolean | null;
 }
 
 type Trip = Database["public"]["Tables"]["trips"]["Row"];
@@ -375,8 +382,46 @@ function SegmentCard({
             )}
           </View>
           {compact && <WeatherLine seg={seg} departureDate={departureDate} />}
-          {stop && (
-            <TouchableOpacity style={styles.segStopCard} onPress={onStopPress} activeOpacity={0.7} accessibilityRole="button" accessibilityLabel="Ver alternativas de posto">
+          {seg.stop_kind === "poi" ? (
+            // POI: card dividido — esquerda o ponto de interesse (sem ⇄), direita o posto
+            // vizinho (com ⇄ p/ trocar de posto, igual aos demais).
+            <View style={{ flexDirection: "row", gap: 8 }}>
+              <View style={[styles.segStopCard, { flex: 1 }]}>
+                <Text style={styles.segStopIcon}>📍</Text>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.segStopName} numberOfLines={1}>{seg.destination_name}</Text>
+                  <Text style={styles.segStopMeta}>Ponto de interesse</Text>
+                </View>
+              </View>
+              {stop && (
+                <TouchableOpacity
+                  style={[styles.segStopCard, { flex: 1 }]}
+                  onPress={onStopPress}
+                  activeOpacity={0.7}
+                  accessibilityRole="button"
+                  accessibilityLabel="Trocar posto"
+                >
+                  <Text style={styles.segStopIcon}>⛽</Text>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.segStopName} numberOfLines={1}>{stop.name}</Text>
+                    <Text style={styles.segStopMeta}>
+                      {stop.rating != null ? `★${stop.rating}` : "Sem avaliação"}
+                      {stop.is_24h ? "  24h" : ""}
+                    </Text>
+                  </View>
+                  <Text style={styles.segStopAlt}>⇄</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+          ) : stop ? (
+            // Posto (manual 'fuel' ou automático null): ⇄ p/ trocar de posto em ambos.
+            <TouchableOpacity
+              style={styles.segStopCard}
+              onPress={onStopPress}
+              activeOpacity={0.7}
+              accessibilityRole="button"
+              accessibilityLabel="Trocar posto"
+            >
               <Text style={styles.segStopIcon}>⛽</Text>
               <View style={{ flex: 1 }}>
                 <Text style={styles.segStopName} numberOfLines={1}>{stop.name}</Text>
@@ -391,7 +436,7 @@ function SegmentCard({
               </View>
               <Text style={styles.segStopAlt}>⇄</Text>
             </TouchableOpacity>
-          )}
+          ) : null}
           {onNavigatePress && (
             <TouchableOpacity style={styles.navigateBtn} onPress={onNavigatePress}>
               <Text style={styles.navigateBtnText}>Navegar →</Text>
@@ -563,6 +608,7 @@ export default function TripDetailScreen() {
   const [addParadaModal, setAddParadaModal] = useState(false);
   const [savingParada, setSavingParada] = useState(false);
   const [wpQuery, setWpQuery] = useState("");
+  const [wpMode, setWpMode] = useState<"fuel" | "poi">("fuel"); // inserção manual: ⛽ posto ou 📍 POI
   const [wpResults, setWpResults] = useState<GeoResult[]>([]);
   const [wpSearching, setWpSearching] = useState(false);
   const [wpSaving, setWpSaving] = useState(false);
@@ -576,6 +622,7 @@ export default function TripDetailScreen() {
       originLat?: number | null; originLng?: number | null;
       destLat?: number | null; destLng?: number | null;
       isArrival?: boolean;
+      isChosenPoint?: boolean;
     }>;
   } | null>(null);
   const [wpPreviewLoading, setWpPreviewLoading] = useState(false);
@@ -831,7 +878,12 @@ export default function TripDetailScreen() {
     // último); a virada precisa ser filtrada à parte para não pendurar um ⛽ indevido.
     const isTurnaround = (seg: Segment) =>
       trip?.trip_type === "day_trip" && !!trip?.round_trip && seg.destination_name === trip.destination;
-    const intermediateSegs = segs.slice(0, -1).filter((seg) => !isTurnaround(seg));
+    // stop_kind 'fuel' = posto exato fixado pelo usuário na inserção manual: nunca re-buscar
+    // (senão o snap-por-rating troca o posto escolhido). 'poi' e null (automático) seguem
+    // ganhando o posto vizinho normalmente.
+    const intermediateSegs = segs
+      .slice(0, -1)
+      .filter((seg) => !isTurnaround(seg) && seg.stop_kind !== "fuel");
     if (intermediateSegs.length === 0) return;
 
     const { data: { user: authUser } } = await supabase.auth.getUser();
@@ -879,6 +931,8 @@ export default function TripDetailScreen() {
     for (let i = 0; i < intermediate.length; i += BATCH) {
       await Promise.allSettled(
         intermediate.slice(i, i + BATCH).map(async (seg, bi) => {
+          // Guard dentro do map (não filtrar o array) p/ preservar o alinhamento com trechos[i+bi].
+          if (seg.stop_kind === "fuel") return; // posto exato fixado — não re-buscar
           const chosen = trechos[i + bi]?.posto ?? null;
           const { results } = await fetchStopSuggestions(seg.dest_lat, seg.dest_lng);
           await supabase.from("stop_suggestions").delete().eq("segment_id", seg.id);
@@ -1019,11 +1073,13 @@ export default function TripDetailScreen() {
       const alt = stopModal?.alternatives.find((a) => a.place_id === placeId);
       const { data: seg } = await supabase
         .from("segments")
-        .select("origin_lat,origin_lng,dest_lat,dest_lng,order_index,day_index,trip_id")
+        .select("origin_lat,origin_lng,dest_lat,dest_lng,order_index,day_index,trip_id,stop_kind")
         .eq("id", segId)
         .single();
 
-      if (alt && seg) {
+      // Num POI o posto é só a sugestão vizinha: trocar apenas re-seleciona (não move o POI).
+      // Nos demais (manual 'fuel' e automático) o posto É o destino → reposiciona o trecho.
+      if (alt && seg && seg.stop_kind !== "poi") {
         // 3. Recalculate current segment: origin → new stop
         const [r1] = await Promise.all([
           fetch(`/api/directions-simple?origin_lat=${seg.origin_lat}&origin_lng=${seg.origin_lng}&dest_lat=${alt.latitude}&dest_lng=${alt.longitude}`).then((r) => r.json()),
@@ -1031,7 +1087,7 @@ export default function TripDetailScreen() {
         if (r1.distance_km != null) {
           await supabase
             .from("segments")
-            .update({ dest_lat: alt.latitude, dest_lng: alt.longitude, distance_km: r1.distance_km, duration_minutes: r1.duration_min })
+            .update({ dest_lat: alt.latitude, dest_lng: alt.longitude, distance_km: r1.distance_km, duration_minutes: r1.duration_min, ...(seg.stop_kind === "fuel" ? { destination_name: alt.name } : {}) })
             .eq("id", segId);
         }
 
@@ -1051,7 +1107,7 @@ export default function TripDetailScreen() {
           if (r2.distance_km != null) {
             await supabase
               .from("segments")
-              .update({ origin_lat: alt.latitude, origin_lng: alt.longitude, distance_km: r2.distance_km, duration_minutes: r2.duration_min })
+              .update({ origin_lat: alt.latitude, origin_lng: alt.longitude, distance_km: r2.distance_km, duration_minutes: r2.duration_min, ...(seg.stop_kind === "fuel" ? { origin_name: alt.name } : {}) })
               .eq("id", nextSeg.id);
           }
         }
@@ -1103,13 +1159,9 @@ export default function TripDetailScreen() {
     setWpSearching(true);
     setWpResults([]);
     try {
-      const res = await fetch("/api/geocode", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ query: query.trim() }),
-      });
-      const json = await res.json();
-      setWpResults(json.results ?? []);
+      // Busca Places filtrada pelo modo: ⛽ só postos, 📍 tudo menos postos.
+      const results = await fetchPlacesSearch(query.trim(), wpMode);
+      setWpResults(results);
     } finally {
       setWpSearching(false);
     }
@@ -1161,6 +1213,8 @@ export default function TripDetailScreen() {
         // Último sub-trecho da subdivisão (chegada ao waypoint/destino): o motor isenta
         // a chegada da regra de km mínimo, então não deve receber alerta "trecho_curto".
         isArrival?: boolean;
+        // Marca o segmento cujo destino É o ponto escolhido pelo usuário (leva o stop_kind).
+        isChosenPoint?: boolean;
       };
 
       // Se um sub-trecho exceder max_stop_km, subdividi-lo com o motor buscar-primeiro
@@ -1199,6 +1253,10 @@ export default function TripDetailScreen() {
           result.lat, result.lng, splitSeg.dest_lat, splitSeg.dest_lng,
         ),
       ]);
+
+      // O ponto que o usuário escolheu é o destino do ÚLTIMO sub-trecho de subA (a "chegada").
+      // É esse segmento que carrega o stop_kind (fuel/poi) e, no modo fuel, o posto pinado.
+      if (subA.length > 0) subA[subA.length - 1].isChosenPoint = true;
 
       setWpImpact({
         deviationKm,
@@ -1264,10 +1322,58 @@ export default function TripDetailScreen() {
           origin_lng: s.originLng ?? null,
           dest_lat: s.destLat ?? null,
           dest_lng: s.destLng ?? null,
+          // O ponto escolhido leva o tipo do modo. O ÚLTIMO sub-trecho mantém o destino
+          // original: se aquele destino já era um POI manual, herda 'poi' (senão inserir uma
+          // parada ANTES de um POI rebaixaria o POI a posto automático). Demais: null.
+          stop_kind: s.isChosenPoint
+            ? (wpMode === "fuel" ? "fuel" : "poi")
+            : (isLast && splitSeg.stop_kind === "poi" ? "poi" : null),
         };
       });
 
       const { data: inserted } = await supabase.from("segments").insert(toInsert).select("*");
+
+      // Modo ⛽ Posto: o usuário escolheu um posto EXATO — pinar esse posto como a parada do
+      // segmento (fetchStops pula stop_kind='fuel', preservando a escolha). No modo 📍 POI não
+      // pinamos nada: o fetchStops abaixo anexa o posto vizinho ao POI (mesma regra de rating).
+      const chosenResult = wpPending.result;
+      const chosenPlaceId = wpMode === "fuel" ? chosenResult.place_id : undefined;
+      if (chosenPlaceId) {
+        const chosenIdx = newSegs.findIndex((s) => s.isChosenPoint);
+        const chosenSeg = (inserted ?? []).find((seg) => seg.order_index === origOrderIndex + chosenIdx);
+        if (chosenSeg) {
+          // O posto exato escolhido fica selecionado; os vizinhos entram como alternativas
+          // (não-selecionadas) para o botão de trocar posto (⇄) ter opções.
+          const { results: nearby } = await fetchStopSuggestions(chosenResult.lat, chosenResult.lng);
+          const rows = [
+            {
+              segment_id: chosenSeg.id,
+              place_id: chosenPlaceId,
+              name: chosenResult.name,
+              rating: chosenResult.rating ?? null,
+              total_ratings: chosenResult.total_ratings ?? null,
+              is_24h: chosenResult.is_24h ?? null,
+              latitude: chosenResult.lat,
+              longitude: chosenResult.lng,
+              is_selected: true,
+            },
+            ...nearby
+              .filter((n) => n.place_id !== chosenPlaceId)
+              .map((n) => ({
+                segment_id: chosenSeg.id,
+                place_id: n.place_id,
+                name: n.name,
+                rating: n.rating,
+                total_ratings: n.total_ratings,
+                is_24h: n.is_24h,
+                latitude: n.latitude,
+                longitude: n.longitude,
+                is_selected: false,
+              })),
+          ];
+          await supabase.from("stop_suggestions").insert(rows);
+        }
+      }
 
       // 4. Fetch fresh full segment list for accurate stop/weather fetching
       const { data: freshAllSegs } = await supabase
@@ -2149,6 +2255,7 @@ export default function TripDetailScreen() {
                     setAddWpModal({ segIndex: globalIdx, segment: seg });
                     setWpQuery("");
                     setWpResults([]);
+                    setWpMode("fuel");
                   } : undefined}
                   onNavigatePress={trip.status === "active" ? () => handleNavigate(seg) : undefined}
                 />
@@ -2756,12 +2863,34 @@ export default function TripDetailScreen() {
             <Pressable style={styles.modalSheet} onPress={() => {}}>
               <View style={styles.modalHandle} />
               <Text style={styles.modalTitle}>Inserir parada</Text>
+              <View style={{ flexDirection: "row", gap: 8, marginBottom: 12 }}>
+                {(["fuel", "poi"] as const).map((m) => {
+                  const active = wpMode === m;
+                  const accent = m === "fuel" ? "#C97826" : "#2563EB";
+                  return (
+                    <TouchableOpacity
+                      key={m}
+                      onPress={() => { setWpMode(m); setWpResults([]); }}
+                      style={{
+                        flex: 1, paddingVertical: 9, borderRadius: 8, alignItems: "center",
+                        borderWidth: 1.5,
+                        borderColor: active ? accent : "#3a3a3a",
+                        backgroundColor: active ? accent + "22" : "transparent",
+                      }}
+                    >
+                      <Text style={{ color: active ? accent : "#aaa", fontWeight: active ? "700" : "500", fontSize: 13 }}>
+                        {m === "fuel" ? "⛽ Posto" : "📍 Ponto de interesse"}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
               <View style={styles.wpSearchRow}>
                 <TextInput
                   style={styles.wpSearchInput}
                   value={wpQuery}
                   onChangeText={setWpQuery}
-                  placeholder="Cidade ou endereço"
+                  placeholder={wpMode === "fuel" ? "Nome do posto ou cidade" : "Mirante, bar, monumento…"}
                   placeholderTextColor="#aaa"
                   onSubmitEditing={() => searchWaypoint(wpQuery)}
                   returnKeyType="search"
@@ -2786,8 +2915,10 @@ export default function TripDetailScreen() {
                   onPress={() => selectForPreview(r)}
                 >
                   <View style={{ flex: 1 }}>
-                    <Text style={styles.altName} numberOfLines={1}>📍 {r.name}</Text>
-                    <Text style={styles.altMeta} numberOfLines={1}>{r.address}</Text>
+                    <Text style={styles.altName} numberOfLines={1}>{wpMode === "fuel" ? "⛽" : "📍"} {r.name}</Text>
+                    <Text style={styles.altMeta} numberOfLines={1}>
+                      {r.rating != null ? `★${r.rating} · ` : ""}{r.address}
+                    </Text>
                   </View>
                 </TouchableOpacity>
               ))}

@@ -11,6 +11,7 @@ interface Waypoint {
   weatherCondition: string | null;
   weatherTemp: number | null;
   dayIndex: number | null;
+  stopKind: string | null;
 }
 
 interface MapData {
@@ -128,14 +129,14 @@ export default function TripMap({ tripId, tripOrigin, tripDestination, onSwitchT
     mapRef.current = map;
 
     // Build stops array: origin + waypoints + destination
-    const stops: Array<{ lat: number; lng: number; name: string; type: "origin" | "stop" | "dest"; km?: number; dur?: number; weather?: string | null; temp?: number | null }> = [];
+    const stops: Array<{ lat: number; lng: number; name: string; type: "origin" | "stop" | "dest"; km?: number; dur?: number; weather?: string | null; temp?: number | null; stopKind?: string | null }> = [];
 
     if (mapData.origin?.lat != null && mapData.origin?.lng != null) {
       stops.push({ lat: mapData.origin.lat, lng: mapData.origin.lng, name: mapData.origin.name, type: "origin" });
     }
     for (const wp of mapData.waypoints) {
       if (wp.lat != null && wp.lng != null) {
-        stops.push({ lat: wp.lat, lng: wp.lng, name: wp.name, type: "stop", km: wp.distanceKm, dur: wp.durationMin, weather: wp.weatherCondition, temp: wp.weatherTemp });
+        stops.push({ lat: wp.lat, lng: wp.lng, name: wp.name, type: "stop", km: wp.distanceKm, dur: wp.durationMin, weather: wp.weatherCondition, temp: wp.weatherTemp, stopKind: wp.stopKind });
       }
     }
     if (mapData.destination?.lat != null && mapData.destination?.lng != null) {
@@ -184,7 +185,7 @@ export default function TripMap({ tripId, tripOrigin, tripDestination, onSwitchT
       const isDest = stop.type === "dest";
       const stopNum = stops.slice(0, i).filter((s) => s.type === "stop").length + 1;
       const label = isOrigin ? "A" : isDest ? "Z" : String(stopNum);
-      const bgColor = isOrigin ? "#16A34A" : isDest ? "#DC2626" : "#C97826";
+      const bgColor = isOrigin ? "#16A34A" : isDest ? "#DC2626" : stop.stopKind === "poi" ? "#2563EB" : "#C97826";
 
       const marker = new google.maps.Marker({
         position: { lat: stop.lat, lng: stop.lng },
@@ -243,15 +244,16 @@ export default function TripMap({ tripId, tripOrigin, tripDestination, onSwitchT
     const temp = stop.temp != null ? ` ${Math.round(stop.temp)}°C` : "";
     const meta = stop.km != null ? `${Math.round(stop.km)}km · ${fmtDuration(stop.dur ?? 0)}` : "";
     const wtxt = icon ? `${icon}${temp}` : "";
-    return `<div style="font-family:sans-serif;font-size:13px;font-weight:700;padding:4px 2px">🟠 ${stop.name}<br><span style="font-size:11px;color:#888;font-weight:400">${meta}${wtxt ? " · " + wtxt : ""}</span></div>`;
+    const glyph = stop.stopKind === "poi" ? "📍" : "🟠";
+    return `<div style="font-family:sans-serif;font-size:13px;font-weight:700;padding:4px 2px">${glyph} ${stop.name}<br><span style="font-size:11px;color:#888;font-weight:400">${meta}${wtxt ? " · " + wtxt : ""}</span></div>`;
   }
 
   // Build the full stops list for the strip (same logic as map init)
   const allStops = (() => {
     if (!mapData) return [];
-    const arr: Array<{ name: string; type: "origin" | "stop" | "dest"; km?: number; dur?: number; weather?: string | null; temp?: number | null }> = [];
+    const arr: Array<{ name: string; type: "origin" | "stop" | "dest"; km?: number; dur?: number; weather?: string | null; temp?: number | null; stopKind?: string | null }> = [];
     if (mapData.origin) arr.push({ name: mapData.origin.name, type: "origin" });
-    for (const wp of (mapData.waypoints ?? [])) arr.push({ name: wp.name, type: "stop", km: wp.distanceKm, dur: wp.durationMin, weather: wp.weatherCondition, temp: wp.weatherTemp });
+    for (const wp of (mapData.waypoints ?? [])) arr.push({ name: wp.name, type: "stop", km: wp.distanceKm, dur: wp.durationMin, weather: wp.weatherCondition, temp: wp.weatherTemp, stopKind: wp.stopKind });
     if (mapData.destination) arr.push({ name: mapData.destination.name, type: "dest" });
     return arr;
   })();
@@ -299,7 +301,7 @@ export default function TripMap({ tripId, tripOrigin, tripDestination, onSwitchT
               {allStops.map((stop, i) => {
                 const isOrigin = stop.type === "origin";
                 const isDest = stop.type === "dest";
-                const icon = isOrigin ? "🟢" : isDest ? "🔴" : "🟠";
+                const icon = isOrigin ? "🟢" : isDest ? "🔴" : stop.stopKind === "poi" ? "📍" : "🟠";
                 const label = isOrigin ? "partida" : isDest ? "destino" : `${Math.round(stop.km ?? 0)}km`;
                 return (
                   <TouchableOpacity
