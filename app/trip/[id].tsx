@@ -33,6 +33,8 @@ import {
 import {
   fetchStopSuggestions,
   fetchPlacesSearch,
+  fetchCitySearch,
+  fetchGeocode,
   type StopSuggestion,
   type StopSuggestionsResult,
 } from "@/services/placesService";
@@ -615,6 +617,16 @@ export default function TripDetailScreen() {
   const [wpResults, setWpResults] = useState<GeoResult[]>([]);
   const [wpSearching, setWpSearching] = useState(false);
   const [wpSaving, setWpSaving] = useState(false);
+  // Busca da cidade de pernoite (Expedição) — restrita a cidade, independente do
+  // toggle ⛽/📍 do Rolê (wpMode). Ver /api/geocode-city.
+  const [cityQuery, setCityQuery] = useState("");
+  const [cityResults, setCityResults] = useState<GeoResult[]>([]);
+  const [citySearching, setCitySearching] = useState(false);
+  // Busca da parada obrigatória (Expedição) — livre (cidade, posto ou endereço),
+  // também desacoplada do wpMode. Ver /api/geocode.
+  const [paradaQuery, setParadaQuery] = useState("");
+  const [paradaResults, setParadaResults] = useState<GeoResult[]>([]);
+  const [paradaSearching, setParadaSearching] = useState(false);
   // Compartilhamento (Fase 1): enviar convite por e-mail + "Sobre esta viagem"
   const [shareModal, setShareModal] = useState(false);
   const [shareEmail, setShareEmail] = useState("");
@@ -1174,6 +1186,32 @@ export default function TripDetailScreen() {
       setWpResults(results);
     } finally {
       setWpSearching(false);
+    }
+  }
+
+  // Cidade de pernoite (Expedição): só cidade, via Geocoding API restrita a locality.
+  async function searchCity(query: string) {
+    if (!query.trim()) return;
+    setCitySearching(true);
+    setCityResults([]);
+    try {
+      const results = await fetchCitySearch(query.trim());
+      setCityResults(results as GeoResult[]);
+    } finally {
+      setCitySearching(false);
+    }
+  }
+
+  // Parada obrigatória (Expedição): busca livre (cidade, posto ou endereço), sem filtro.
+  async function searchParada(query: string) {
+    if (!query.trim()) return;
+    setParadaSearching(true);
+    setParadaResults([]);
+    try {
+      const results = await fetchGeocode(query.trim());
+      setParadaResults(results as GeoResult[]);
+    } finally {
+      setParadaSearching(false);
     }
   }
 
@@ -1927,8 +1965,8 @@ export default function TripDetailScreen() {
       }
 
       setEditCityModal(null);
-      setWpQuery("");
-      setWpResults([]);
+      setCityQuery("");
+      setCityResults([]);
       await load();
     } catch (e: any) {
       Alert.alert("Erro ao editar cidade", e.message ?? "Tente novamente.");
@@ -2002,8 +2040,8 @@ export default function TripDetailScreen() {
         trip_id: id, name: geo.name, latitude: geo.lat, longitude: geo.lng, order_index: nextOrder, is_mandatory: true,
       }]);
       setAddParadaModal(false);
-      setWpQuery("");
-      setWpResults([]);
+      setParadaQuery("");
+      setParadaResults([]);
       await calcularRota();
       await load();
     } catch (e: any) {
@@ -2165,8 +2203,8 @@ export default function TripDetailScreen() {
           onEditCity={!isDayTrip && dayIdx < numDiasCal && trip.status !== "active"
             && togglingRest === null && generatingDay === null && !savingCity ? () => {
             setEditCityModal({ dayIndex: dayIdx, currentCity: lastSeg.destination_name ?? "" });
-            setWpQuery("");
-            setWpResults([]);
+            setCityQuery("");
+            setCityResults([]);
           } : undefined}
           onToggleRest={!isDayTrip && dayIdx > 1 && dayIdx < numDiasCal ? () => toggleRestDay(dayIdx) : undefined}
         />
@@ -2522,7 +2560,7 @@ export default function TripDetailScreen() {
               {!isDayTrip && segments.length > 0 && trip.status !== "active" && (
                 <TouchableOpacity
                   style={[styles.menuRow, (calculating || savingParada) && styles.menuRowDisabled]}
-                  onPress={() => { setMenuOpen(false); setAddParadaModal(true); setWpQuery(""); setWpResults([]); }}
+                  onPress={() => { setMenuOpen(false); setAddParadaModal(true); setParadaQuery(""); setParadaResults([]); }}
                   disabled={calculating || savingParada}
                 >
                   <Text style={styles.menuIcon}>➕</Text>
@@ -3090,17 +3128,17 @@ export default function TripDetailScreen() {
               <View style={styles.wpSearchRow}>
                 <TextInput
                   style={styles.wpSearchInput}
-                  value={wpQuery}
-                  onChangeText={setWpQuery}
+                  value={cityQuery}
+                  onChangeText={setCityQuery}
                   placeholder="Buscar cidade"
                   placeholderTextColor="#aaa"
-                  onSubmitEditing={() => searchWaypoint(wpQuery)}
+                  onSubmitEditing={() => searchCity(cityQuery)}
                   returnKeyType="search"
                   autoFocus
                   editable={!savingCity}
                 />
-                <TouchableOpacity style={styles.wpSearchBtn} onPress={() => searchWaypoint(wpQuery)} disabled={wpSearching || savingCity}>
-                  {wpSearching ? <ActivityIndicator color="#fff" size="small" /> : <Text style={styles.wpSearchBtnText}>Buscar</Text>}
+                <TouchableOpacity style={styles.wpSearchBtn} onPress={() => searchCity(cityQuery)} disabled={citySearching || savingCity}>
+                  {citySearching ? <ActivityIndicator color="#fff" size="small" /> : <Text style={styles.wpSearchBtnText}>Buscar</Text>}
                 </TouchableOpacity>
               </View>
               {savingCity ? (
@@ -3110,7 +3148,7 @@ export default function TripDetailScreen() {
                 </View>
               ) : (
                 <>
-                  {wpResults.map((r, idx) => (
+                  {cityResults.map((r, idx) => (
                     <TouchableOpacity key={idx} style={styles.altRow} onPress={() => editarCidadeDia(r)}>
                       <View style={{ flex: 1 }}>
                         <Text style={styles.altName} numberOfLines={1}>🏙 {r.name}</Text>
@@ -3118,8 +3156,8 @@ export default function TripDetailScreen() {
                       </View>
                     </TouchableOpacity>
                   ))}
-                  {wpResults.length === 0 && !wpSearching && wpQuery.trim().length > 0 && (
-                    <Text style={styles.modalCancelText}>Nenhum resultado. Tente outro nome.</Text>
+                  {cityResults.length === 0 && !citySearching && cityQuery.trim().length > 0 && (
+                    <Text style={styles.modalCancelText}>Nenhuma cidade encontrada. Tente outro nome.</Text>
                   )}
                 </>
               )}
@@ -3149,17 +3187,17 @@ export default function TripDetailScreen() {
               <View style={styles.wpSearchRow}>
                 <TextInput
                   style={styles.wpSearchInput}
-                  value={wpQuery}
-                  onChangeText={setWpQuery}
+                  value={paradaQuery}
+                  onChangeText={setParadaQuery}
                   placeholder="Cidade, posto ou endereço"
                   placeholderTextColor="#aaa"
-                  onSubmitEditing={() => searchWaypoint(wpQuery)}
+                  onSubmitEditing={() => searchParada(paradaQuery)}
                   returnKeyType="search"
                   autoFocus
                   editable={!savingParada}
                 />
-                <TouchableOpacity style={styles.wpSearchBtn} onPress={() => searchWaypoint(wpQuery)} disabled={wpSearching || savingParada}>
-                  {wpSearching ? <ActivityIndicator color="#fff" size="small" /> : <Text style={styles.wpSearchBtnText}>Buscar</Text>}
+                <TouchableOpacity style={styles.wpSearchBtn} onPress={() => searchParada(paradaQuery)} disabled={paradaSearching || savingParada}>
+                  {paradaSearching ? <ActivityIndicator color="#fff" size="small" /> : <Text style={styles.wpSearchBtnText}>Buscar</Text>}
                 </TouchableOpacity>
               </View>
               {savingParada ? (
@@ -3169,7 +3207,7 @@ export default function TripDetailScreen() {
                 </View>
               ) : (
                 <>
-                  {wpResults.map((r, idx) => (
+                  {paradaResults.map((r, idx) => (
                     <TouchableOpacity key={idx} style={styles.altRow} onPress={() => adicionarParada(r)}>
                       <View style={{ flex: 1 }}>
                         <Text style={styles.altName} numberOfLines={1}>📍 {r.name}</Text>
@@ -3177,7 +3215,7 @@ export default function TripDetailScreen() {
                       </View>
                     </TouchableOpacity>
                   ))}
-                  {wpResults.length === 0 && !wpSearching && wpQuery.trim().length > 0 && (
+                  {paradaResults.length === 0 && !paradaSearching && paradaQuery.trim().length > 0 && (
                     <Text style={styles.modalCancelText}>Nenhum resultado. Tente outro nome.</Text>
                   )}
                 </>
