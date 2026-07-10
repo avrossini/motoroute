@@ -67,3 +67,45 @@ export async function fetchPlacesSearch(
     return [];
   }
 }
+
+export interface GeoSearchResult {
+  name: string;
+  address: string;
+  lat: number;
+  lng: number;
+  place_id?: string | null;
+}
+
+/** Busca de CIDADE (Geocoding API restrita a cidade) — destino de fim de dia da
+ *  Expedição, que por regra precisa ser uma cidade. Ver /api/geocode-city. */
+export async function fetchCitySearch(query: string): Promise<GeoSearchResult[]> {
+  try {
+    const res = await fetch("/api/geocode-city", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ query }),
+    });
+    if (!res.ok) return [];
+    const json = await res.json();
+    return json.results ?? [];
+  } catch {
+    return [];
+  }
+}
+
+/** Busca livre por texto (Places Text Search sem filtro) — parada obrigatória da
+ *  Expedição, que pode ser cidade, posto OU endereço. Ver /api/geocode. */
+export async function fetchGeocode(query: string): Promise<GeoSearchResult[]> {
+  try {
+    const res = await fetch("/api/geocode", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ query }),
+    });
+    if (!res.ok) return [];
+    const json = await res.json();
+    return json.results ?? [];
+  } catch {
+    return [];
+  }
+}
