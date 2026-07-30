@@ -48,11 +48,12 @@ export interface PlaceSearchResult {
   types: string[];
 }
 
-/** Busca Places por texto para a inserção manual de parada.
- *  mode 'fuel' → só postos (type=gas_station); 'poi' → tudo menos postos. */
+/** Busca Places por texto para a inserção manual de parada e para favoritar.
+ *  mode 'fuel' → só postos (type=gas_station); 'poi' → tudo menos postos;
+ *  'all' → qualquer lugar (posto ou não). */
 export async function fetchPlacesSearch(
   query: string,
-  mode: "fuel" | "poi"
+  mode: "fuel" | "poi" | "all"
 ): Promise<PlaceSearchResult[]> {
   try {
     const res = await fetch("/api/places-search", {

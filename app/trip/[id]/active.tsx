@@ -13,6 +13,7 @@ import { useLocalSearchParams, router } from "expo-router";
 import { useCallback, useState, useRef, useEffect } from "react";
 import { useFocusEffect } from "expo-router";
 import { getSupabase } from "@/services/supabase";
+import { addFavorite, removeFavorite } from "@/services/favoritesService";
 import { openNavigation } from "@/platform/navigation";
 import { NAV_APPS, type NavApp } from "@/platform/nav-apps";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
@@ -64,8 +65,10 @@ export default function ActiveTripScreen() {
   const [checkinModal, setCheckinModal] = useState(false);
   const [checkinKm, setCheckinKm] = useState("");
   const [checkinFueled, setCheckinFueled] = useState(false);
-  // Posto associado a cada segmento (para o botão "Ir ao posto" quando a parada é um POI).
-  const [stopById, setStopById] = useState<Map<string, { name: string; lat: number; lng: number }>>(new Map());
+  // Posto associado a cada segmento (para o botão "Ir ao posto" e para favoritar).
+  const [stopById, setStopById] = useState<Map<string, { name: string; lat: number; lng: number; place_id: string; rating: number | null }>>(new Map());
+  const [favoriteIds, setFavoriteIds] = useState<Set<string>>(new Set());
+  const [favSaving, setFavSaving] = useState(false);
   const [navApp, setNavApp] = useState<NavApp | null>(null); // app de navegação preferido (Preferências)
   const stopsScrollRef = useRef<ScrollView>(null); // trilha de progresso (scroll horizontal)
 
@@ -108,14 +111,23 @@ export default function ActiveTripScreen() {
     if (segsForStops.length > 0) {
       const { data: stopsData } = await supabase
         .from("stop_suggestions")
-        .select("segment_id,name,latitude,longitude")
+        .select("segment_id,name,latitude,longitude,place_id,rating")
         .in("segment_id", segsForStops.map((s) => s.id))
         .eq("is_selected", true);
-      const m = new Map<string, { name: string; lat: number; lng: number }>();
+      const m = new Map<string, { name: string; lat: number; lng: number; place_id: string; rating: number | null }>();
       for (const s of stopsData ?? []) {
-        if (s.segment_id) m.set(s.segment_id, { name: s.name, lat: Number(s.latitude), lng: Number(s.longitude) });
+        if (s.segment_id) m.set(s.segment_id, {
+          name: s.name, lat: Number(s.latitude), lng: Number(s.longitude),
+          place_id: s.place_id, rating: s.rating != null ? Number(s.rating) : null,
+        });
       }
       setStopById(m);
+    }
+
+    // Favoritos do usuário (para refletir ⭐/☆ no check-in)
+    if (user) {
+      const { data: favData } = await supabase.from("favorites").select("place_id").eq("user_id", user.id);
+      setFavoriteIds(new Set((favData ?? []).map((f) => f.place_id)));
     }
 
     setLoading(false);
@@ -195,6 +207,26 @@ export default function ActiveTripScreen() {
     await doCheckin(false, km || undefined, checkinFueled);
   }
 
+  // Favoritar/desfavoritar o posto da parada atual (a partir do modal de check-in).
+  async function toggleCurrentFav() {
+    const s = currentSeg ? stopById.get(currentSeg.id) : undefined;
+    if (!s?.place_id) return;
+    setFavSaving(true);
+    try {
+      if (favoriteIds.has(s.place_id)) {
+        const ok = await removeFavorite(s.place_id);
+        if (ok) setFavoriteIds((prev) => { const n = new Set(prev); n.delete(s.place_id); return n; });
+      } else {
+        const ok = await addFavorite({
+          place_id: s.place_id, name: s.name, latitude: s.lat, longitude: s.lng, rating: s.rating, place_type: "fuel",
+        });
+        if (ok) setFavoriteIds((prev) => new Set([...prev, s.place_id]));
+      }
+    } finally {
+      setFavSaving(false);
+    }
+  }
+
   async function completeTrip() {
     setActionLoading(true);
     const supabase = getSupabase();
@@ -230,6 +262,7 @@ export default function ActiveTripScreen() {
 
   const alerts = ((currentSeg?.alert_types as string[] | null) ?? []);
   const topAlert = alerts[0] ?? null;
+  const curStop = currentSeg ? stopById.get(currentSeg.id) : undefined;
 
   return (
     <View style={styles.container}>
@@ -490,6 +523,24 @@ export default function ActiveTripScreen() {
               <Text style={styles.fuelLabel}>Abasteci nesta parada</Text>
             </TouchableOpacity>
 
+            {curStop?.place_id ? (
+              <TouchableOpacity
+                style={styles.favToggle}
+                onPress={toggleCurrentFav}
+                disabled={favSaving}
+                accessibilityRole="button"
+                accessibilityLabel={favoriteIds.has(curStop.place_id) ? "Remover posto dos favoritos" : "Favoritar este posto"}
+              >
+                <Text style={styles.favStar}>{favoriteIds.has(curStop.place_id) ? "⭐" : "☆"}</Text>
+                <Text style={styles.favLabel} numberOfLines={1}>
+                  {favoriteIds.has(curStop.place_id)
+                    ? "Posto favoritado"
+                    : `Favoritar ${curStop.name.split(",")[0]}`}
+                </Text>
+                {favSaving && <ActivityIndicator size="small" color="#C97826" style={{ marginLeft: "auto" }} />}
+              </TouchableOpacity>
+            ) : null}
+
             <TouchableOpacity style={styles.confirmBtn} onPress={confirmCheckin}>
               <Text style={styles.confirmBtnText}>Confirmar Check-in</Text>
             </TouchableOpacity>
@@ -685,6 +736,9 @@ const styles = StyleSheet.create({
   fuelCheckbox: { width: 24, height: 24, borderRadius: 6, borderWidth: 2, borderColor: "#555", justifyContent: "center", alignItems: "center" },
   fuelCheckboxOn: { backgroundColor: "#16A34A", borderColor: "#16A34A" },
   fuelLabel: { fontSize: 15, color: "#fff" },
+  favToggle: { flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 20, paddingVertical: 4 },
+  favStar: { fontSize: 22, color: "#fff" },
+  favLabel: { fontSize: 15, color: "#fff", flexShrink: 1 },
   confirmBtn: { backgroundColor: "#22C55E", borderRadius: 12, paddingVertical: 16, alignItems: "center", marginBottom: 10 },
   confirmBtnText: { color: "#fff", fontSize: 16, fontWeight: "700" },
   cancelBtn: { paddingVertical: 10, alignItems: "center" },
