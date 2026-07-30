@@ -42,10 +42,14 @@ export async function POST(request: Request): Promise<Response> {
   }
 
   if (json.status !== "OK" && json.status !== "ZERO_RESULTS") {
-    // Loga o motivo do Google (error_message) para diagnostico; nao expoe ao cliente.
+    // Negacao do Google e erro operacional: loga em api_usage_logs E error_logs
+    // (alertas do admin), com o error_message. Nao expoe a mensagem crua ao cliente.
     await logApiUsage(request, {
       provider: "google", api_type: "geocoding", status: "error", duration_ms: Date.now() - start,
       error_code: json.status, metadata: { endpoint: "geocode-city", error_message: json.error_message ?? null },
+    });
+    await logError(request, {
+      endpoint: "geocode-city", error: json.status, context: { query, error_message: json.error_message ?? null },
     });
     return Response.json({ error: json.status }, { status: 422 });
   }
