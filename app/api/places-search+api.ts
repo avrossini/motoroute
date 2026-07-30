@@ -15,9 +15,12 @@ interface PlaceSearchResult {
   types: string[];
 }
 
-// Busca de texto (Places Text Search) para a inserção MANUAL de parada no Rolê.
+// Busca de texto (Places Text Search) para a inserção MANUAL de parada no Rolê e
+// para favoritar lugares.
 //   mode 'fuel' (padrão) → prioriza postos (type=gas_station).
 //   mode 'poi'           → busca livre, removendo resultados que sejam posto de combustível.
+//   mode 'all'           → busca livre sem filtro (posto OU qualquer lugar) — usado ao
+//                          favoritar na tela de favoritos, que aceita todos os tipos.
 // Endpoint separado do /api/geocode de propósito: geocode devolve dados mínimos e é consumido
 // por outras telas (nova/lodging); aqui precisamos de place_id + types + rating.
 export async function POST(request: Request): Promise<Response> {
@@ -27,7 +30,7 @@ export async function POST(request: Request): Promise<Response> {
     return Response.json({ error: "query required" }, { status: 400 });
   }
 
-  const typeParam = mode === "poi" ? "" : "&type=gas_station";
+  const typeParam = mode === "poi" || mode === "all" ? "" : "&type=gas_station";
   const url = `https://maps.googleapis.com/maps/api/place/textsearch/json?query=${encodeURIComponent(query)}${typeParam}&language=pt-BR&key=${GOOGLE_KEY}`;
 
   let res: Response, json: any;

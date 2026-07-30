@@ -17,6 +17,7 @@ import { Platform } from "react-native";
 import { useState, useCallback, useRef, useEffect } from "react";
 import { useFocusEffect } from "expo-router";
 import { getSupabase } from "@/services/supabase";
+import { addFavorite, removeFavorite } from "@/services/favoritesService";
 import { calcularRoleRemoto } from "@/services/roleService";
 import { calcularExpedicaoRemota } from "@/services/expedicaoService";
 import type { Trecho } from "@/domain/route/types";
@@ -338,6 +339,9 @@ function SegmentCard({
   onStopPress,
   onAddPress,
   compact = false,
+  isFavorited = false,
+  favLoading = false,
+  onToggleFavorite,
 }: {
   seg: Segment;
   stop?: StopSuggestion;
@@ -347,6 +351,9 @@ function SegmentCard({
   onStopPress?: () => void;
   onAddPress?: () => void;
   compact?: boolean; // board de Expedição: clima em 1 linha, sem painel lateral de 76px
+  isFavorited?: boolean;
+  favLoading?: boolean;
+  onToggleFavorite?: () => void;
 }) {
   const alerts: string[] = (seg.alert_types as string[] | null) ?? [];
 
@@ -360,6 +367,19 @@ function SegmentCard({
             </Text>
             <View style={styles.segTopRight}>
               <Text style={styles.segTime}>{departureTime}</Text>
+              {stop && onToggleFavorite && (
+                <TouchableOpacity
+                  onPress={onToggleFavorite}
+                  disabled={favLoading}
+                  hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                  accessibilityRole="button"
+                  accessibilityLabel={isFavorited ? "Remover posto dos favoritos" : "Favoritar posto"}
+                >
+                  {favLoading
+                    ? <ActivityIndicator size="small" color="#C97826" />
+                    : <Text style={styles.segFavStar}>{isFavorited ? "⭐" : "☆"}</Text>}
+                </TouchableOpacity>
+              )}
               {onAddPress && (
                 <TouchableOpacity style={styles.addWpInCardBtn} onPress={onAddPress} hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}>
                   <Text style={styles.addWpInCardBtnText}>＋</Text>
@@ -769,27 +789,21 @@ export default function TripDetailScreen() {
     });
   }, [id]));
 
-  async function toggleFavorite(alt: StopAlternative) {
-    const supabase = getSupabase();
-    const { data: { user: authUser } } = await supabase.auth.getUser();
-    if (!authUser) return;
-    setFavSaving(alt.place_id);
+  // Aceita StopAlternative (modal) OU StopSuggestion (card do posto) — ambos têm
+  // os campos mínimos. Usa o favoritesService central.
+  async function toggleFavorite(p: {
+    place_id: string; name: string; rating: number | null; latitude: number; longitude: number;
+  }) {
+    setFavSaving(p.place_id);
     try {
-      if (favoriteIds.has(alt.place_id)) {
-        await supabase.from("favorites").delete()
-          .eq("user_id", authUser.id).eq("place_id", alt.place_id);
-        setFavoriteIds((prev) => { const s = new Set(prev); s.delete(alt.place_id); return s; });
+      if (favoriteIds.has(p.place_id)) {
+        const ok = await removeFavorite(p.place_id);
+        if (ok) setFavoriteIds((prev) => { const s = new Set(prev); s.delete(p.place_id); return s; });
       } else {
-        await supabase.from("favorites").upsert({
-          user_id: authUser.id,
-          place_id: alt.place_id,
-          name: alt.name,
-          place_type: "fuel",
-          latitude: alt.latitude,
-          longitude: alt.longitude,
-          rating: alt.rating,
-        }, { onConflict: "user_id,place_id" });
-        setFavoriteIds((prev) => new Set([...prev, alt.place_id]));
+        const ok = await addFavorite({
+          place_id: p.place_id, name: p.name, latitude: p.latitude, longitude: p.longitude, rating: p.rating, place_type: "fuel",
+        });
+        if (ok) setFavoriteIds((prev) => new Set([...prev, p.place_id]));
       }
     } finally {
       setFavSaving(null);
@@ -2288,12 +2302,16 @@ export default function TripDetailScreen() {
             const isLastSeg = globalIdx === segments.length - 1;
             const showLodging = seg.is_last_of_day && dayIdx < numDiasCal && !isDayTrip;
             const depTime = segmentTimes.get(seg.id) ?? baseTime;
+            const segStop = stops.get(seg.id);
 
             return (
               <View key={seg.id}>
                 <SegmentCard
                   seg={seg}
-                  stop={stops.get(seg.id)}
+                  stop={segStop}
+                  isFavorited={segStop ? favoriteIds.has(segStop.place_id) : false}
+                  favLoading={!!segStop && favSaving === segStop.place_id}
+                  onToggleFavorite={segStop ? () => toggleFavorite(segStop) : undefined}
                   showDayEnd={!isDayTrip}
                   departureDate={trip.departure_date}
                   departureTime={depTime}
@@ -3515,6 +3533,7 @@ const styles = StyleSheet.create({
   segRoute: { flex: 1, fontSize: 13, fontWeight: "700", color: "#1A1A1A", marginRight: 8 },
   segTopRight: { flexDirection: "row", alignItems: "center", gap: 8, flexShrink: 0 },
   segTime: { fontSize: 11, color: "#888" },
+  segFavStar: { fontSize: 16 },
   addWpInCardBtn: {
     width: 22, height: 22, borderRadius: 11,
     backgroundColor: "#C97826",
