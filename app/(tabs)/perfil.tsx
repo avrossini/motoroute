@@ -10,6 +10,7 @@ import {
 } from "react-native";
 import { router, useFocusEffect } from "expo-router";
 import { getSupabase } from "@/services/supabase";
+import { getPushStatus, subscribePush, unsubscribePush, type PushStatus } from "@/platform/push";
 import { useNotifications, AppNotification } from "@/context/notifications";
 
 interface Motorcycle {
@@ -39,12 +40,35 @@ export default function PerfilScreen() {
   const [notifMsg, setNotifMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const { notifications, refresh: refreshNotifs } = useNotifications();
 
+  const [pushStatus, setPushStatus] = useState<PushStatus>("unsupported");
+  const [pushBusy, setPushBusy] = useState(false);
+
   useFocusEffect(
     useCallback(() => {
       load();
       refreshNotifs();
+      getPushStatus().then(setPushStatus);
     }, [refreshNotifs])
   );
+
+  // Convite contextual: ativa o push a partir do gesto do usuário no banner.
+  async function enablePush() {
+    setPushBusy(true);
+    try {
+      const status = await subscribePush();
+      setPushStatus(status);
+      // Feedback via notifMsg (Alert é no-op no web — padrão já usado nesta tela)
+      if (status === "subscribed") {
+        setNotifMsg({ ok: true, text: "Notificações ativadas neste dispositivo. 🔔" });
+      } else if (status === "denied") {
+        setNotifMsg({ ok: false, text: "O navegador bloqueou as notificações. Libere nas configurações do site e tente de novo." });
+      } else {
+        setNotifMsg({ ok: false, text: "Não foi possível ativar as notificações. Tente novamente." });
+      }
+    } finally {
+      setPushBusy(false);
+    }
+  }
 
   useEffect(() => {
     load();
@@ -77,6 +101,9 @@ export default function PerfilScreen() {
   }
 
   async function signOut() {
+    // Remove a subscription de push ANTES do signOut (a RLS precisa da sessão viva) —
+    // senão o dispositivo continua recebendo notificações da conta que saiu.
+    await unsubscribePush().catch(() => {});
     const supabase = getSupabase();
     await supabase.auth.signOut();
     router.replace("/(auth)/login" as never);
@@ -152,6 +179,22 @@ export default function PerfilScreen() {
       {unread.length > 0 && (
         <View style={styles.section}>
           <Text style={styles.sectionLabel}>NOTIFICAÇÕES</Text>
+          {pushStatus === "unsubscribed" && (
+            <TouchableOpacity
+              style={styles.pushBanner}
+              onPress={enablePush}
+              disabled={pushBusy}
+              accessibilityRole="button"
+              accessibilityLabel="Ativar notificações no dispositivo"
+            >
+              <Text style={styles.pushBannerText}>
+                🔔 Ative as notificações no celular para não perder convites
+              </Text>
+              {pushBusy
+                ? <ActivityIndicator color="#C97826" size="small" />
+                : <Text style={styles.pushBannerCta}>Ativar</Text>}
+            </TouchableOpacity>
+          )}
           {unread.map((n) => (
             <NotificationCard
               key={n.id}
@@ -411,6 +454,13 @@ const styles = StyleSheet.create({
     backgroundColor: "#FDECEA", color: "#E53935", fontSize: 13.5, fontWeight: "600",
     padding: 12, borderRadius: 10, overflow: "hidden",
   },
+  pushBanner: {
+    backgroundColor: "#FDF3E7", borderRadius: 10, borderWidth: 1, borderColor: "#F0DCC3",
+    paddingHorizontal: 12, paddingVertical: 10, marginBottom: 8,
+    flexDirection: "row", alignItems: "center", gap: 10,
+  },
+  pushBannerText: { flex: 1, fontSize: 13, color: "#7A5A2E", lineHeight: 18 },
+  pushBannerCta: { fontSize: 13.5, fontWeight: "700", color: "#C97826" },
 
   menuItem: {
     backgroundColor: "#fff",

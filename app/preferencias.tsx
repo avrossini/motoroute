@@ -12,6 +12,7 @@ import {
 import { router } from "expo-router";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { NAV_APPS } from "@/platform/nav-apps";
+import { getPushStatus, subscribePush, unsubscribePush, type PushStatus } from "@/platform/push";
 import { getSupabase } from "@/services/supabase";
 
 interface Prefs {
@@ -79,8 +80,31 @@ export default function PreferenciasScreen() {
   const [prefId, setPrefId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  // Push no dispositivo: estado real do navegador (não vive em user_preferences).
+  const [pushStatus, setPushStatus] = useState<PushStatus>("unsupported");
+  const [pushBusy, setPushBusy] = useState(false);
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => { load(); getPushStatus().then(setPushStatus); }, []);
+
+  // Ação imediata (fora do padrão salvar-no-botão): o requestPermission precisa
+  // vir do gesto do toque, e a assinatura é um side-effect no navegador.
+  async function togglePush(on: boolean) {
+    setPushBusy(true);
+    try {
+      const status = on ? await subscribePush() : await unsubscribePush();
+      setPushStatus(status);
+      if (on && status === "denied") {
+        Alert.alert(
+          "Permissão bloqueada",
+          "O navegador está bloqueando notificações deste site. Libere em configurações do site e tente de novo."
+        );
+      } else if (on && status !== "subscribed") {
+        Alert.alert("Ops", "Não foi possível ativar as notificações. Tente novamente.");
+      }
+    } finally {
+      setPushBusy(false);
+    }
+  }
 
   async function load() {
     const supabase = getSupabase();
@@ -209,6 +233,28 @@ export default function PreferenciasScreen() {
             <Switch value={prefs.notifications_enabled} onValueChange={(v) => setPrefs(p => ({ ...p, notifications_enabled: v }))}
               trackColor={{ false: "#ddd", true: "#C97826" }} thumbColor="#fff" />
           </View>
+          {pushStatus !== "unsupported" && (
+            <View style={styles.switchRow}>
+              <View style={styles.fieldLeft}>
+                <Text style={styles.fieldLabel}>Notificações no dispositivo</Text>
+                <Text style={styles.fieldHint}>
+                  {pushStatus === "denied"
+                    ? "Permissão bloqueada — libere nas configurações do site no navegador"
+                    : "Receba convites e avisos mesmo com o app fechado"}
+                </Text>
+              </View>
+              {pushBusy ? (
+                <ActivityIndicator color="#C97826" size="small" />
+              ) : (
+                <Switch
+                  value={pushStatus === "subscribed"}
+                  onValueChange={togglePush}
+                  accessibilityLabel="Notificações no dispositivo"
+                  trackColor={{ false: "#ddd", true: "#C97826" }} thumbColor="#fff"
+                />
+              )}
+            </View>
+          )}
         </View>
 
         <View style={styles.group}>

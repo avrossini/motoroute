@@ -21,3 +21,5 @@ supabase/.temp
 
 # Metro bundler — cache de transformações (gerado em dev, não versionar)
 .metro-cache/
+.env.*.local
+.env.push.local
