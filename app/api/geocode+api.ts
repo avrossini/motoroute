@@ -22,7 +22,16 @@ export async function POST(request: Request): Promise<Response> {
   }
 
   if (json.status !== "OK" && json.status !== "ZERO_RESULTS") {
-    await logApiUsage(request, { provider: "google", api_type: "geocoding", status: "error", duration_ms: Date.now() - start });
+    // Negacao do Google (REQUEST_DENIED, OVER_QUERY_LIMIT, ...) e erro operacional:
+    // loga em api_usage_logs (uso/custo) E em error_logs (alertas do admin), com o
+    // error_message do Google. Nao expoe a mensagem crua ao cliente.
+    await logApiUsage(request, {
+      provider: "google", api_type: "geocoding", status: "error", duration_ms: Date.now() - start,
+      error_code: json.status, metadata: { endpoint: "geocode", error_message: json.error_message ?? null },
+    });
+    await logError(request, {
+      endpoint: "geocode", error: json.status, context: { query, error_message: json.error_message ?? null },
+    });
     return Response.json({ error: json.status }, { status: 422 });
   }
 
