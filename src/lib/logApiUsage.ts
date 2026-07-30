@@ -30,6 +30,8 @@ export async function logApiUsage(
     status: "success" | "error";
     duration_ms: number;
     trip_id?: string | null;
+    error_code?: string | null;
+    metadata?: Record<string, unknown> | null;
   }
 ): Promise<void> {
   if (!SUPABASE_URL || !SERVICE_KEY) return;
@@ -53,6 +55,8 @@ export async function logApiUsage(
         request_status: opts.status,
         duration_ms: opts.duration_ms,
         estimated_cost_cents,
+        error_code: opts.error_code ?? null,
+        metadata_json: opts.metadata ?? null,
       }),
     });
   } catch {
