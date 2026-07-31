@@ -3,20 +3,19 @@
 -- (fire-and-forget; o push JAMAIS pode abortar a criação da notificação).
 --
 -- Aplicação em prod: cirúrgica via psql no pooler + NOTIFY pgrst, 'reload schema'
--- (history drift — não usar supabase db push). Após aplicar, setar o segredo:
---   ALTER DATABASE postgres SET app.push_webhook_secret = '<mesmo valor do env PUSH_WEBHOOK_SECRET na Vercel>';
--- Sem o GUC setado (ex.: dev local), a função vira no-op e nenhum POST sai —
--- assim o segredo não fica no repositório e o dev local não atinge produção.
+-- (history drift — não usar supabase db push). Após aplicar, guardar o segredo no
+-- Supabase Vault (uma vez; NÃO commitar o valor):
+--   SELECT vault.create_secret('<mesmo valor do env PUSH_WEBHOOK_SECRET na Vercel>', 'push_webhook_secret');
+-- A função lê vault.decrypted_secrets (SECURITY DEFINER). Sem Vault ou sem o
+-- segredo (ex.: dev local), vira no-op e nenhum POST sai — o segredo não fica no
+-- repositório e o dev local não atinge produção.
+-- (Nota: GUC via ALTER DATABASE/ROLE não é possível no hosted — postgres não é
+-- superuser p/ parâmetros persistentes no PG15+; por isso o Vault.)
 --
--- GOTCHA (pool): ALTER DATABASE ... SET só vale para conexões NOVAS. As conexões
--- já abertas do PostgREST/pooler seguem sem o GUC (trigger no-op) até reciclarem —
--- push intermitente logo após aplicar. Reiniciar o serviço `rest` do Supabase
--- (mesmo runbook do GOTCHA das RPCs da Fase 1) ou aguardar a reciclagem.
--- Verificar numa conexão nova: SELECT current_setting('app.push_webhook_secret', true);
---
--- Rotação do segredo: rodar o ALTER DATABASE com o valor novo + atualizar o env
--- PUSH_WEBHOOK_SECRET na Vercel. (O pg_net grava headers em net.http_request_queue /
--- net._http_response — conferir que o schema net não tem grants p/ anon/authenticated.)
+-- Rotação do segredo: UPDATE via vault.update_secret (achar o id em vault.secrets
+-- WHERE name='push_webhook_secret') + atualizar o env PUSH_WEBHOOK_SECRET na Vercel.
+-- (O pg_net grava headers em net.http_request_queue / net._http_response —
+-- conferir que o schema net não tem grants p/ anon/authenticated.)
 
 CREATE EXTENSION IF NOT EXISTS pg_net WITH SCHEMA extensions;
 
@@ -53,9 +52,14 @@ AS $$
 DECLARE
   v_secret text;
 BEGIN
-  v_secret := current_setting('app.push_webhook_secret', true);
+  -- Segredo no Vault (cifrado). Sem Vault (dev local) ou sem o segredo: no-op silencioso.
+  IF to_regclass('vault.decrypted_secrets') IS NULL THEN
+    RETURN NEW;
+  END IF;
+  SELECT decrypted_secret INTO v_secret
+    FROM vault.decrypted_secrets WHERE name = 'push_webhook_secret';
   IF v_secret IS NULL OR v_secret = '' THEN
-    RETURN NEW;  -- ambiente sem push (ex.: dev local): no-op
+    RETURN NEW;
   END IF;
 
   -- net.http_post apenas ENFILEIRA (async) — não adiciona latência ao INSERT.
